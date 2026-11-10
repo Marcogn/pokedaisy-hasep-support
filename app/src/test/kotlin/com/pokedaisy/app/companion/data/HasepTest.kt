@@ -114,3 +114,100 @@ class HasepBattleTest {
         assertEquals(s["HandleInputChooseMove"], fn)
     }
 }
+
+/** SHINY ODDS and the FOE TEAM on a Hasep build whose table has gEnemyParty (2.0.6.PLUS.11 on). */
+class HasepShinyTest {
+    private val head: ByteArray = javaClass.classLoader!!.getResourceAsStream("fixtures/hasep_wild/rom_head.bin")!!.readBytes()
+    private val rom = { addr: Long, len: Int ->
+        val off = (addr - 0x08000000L).toInt()
+        ByteArray(len) { i -> head.getOrElse(off + i) { 0 } }
+    }
+
+    private class Ram(src: MemoryReader) {
+        val ewram: ByteArray = src.readCoreMemory(0x02000000L, 0x40000)
+        val iwram: ByteArray = src.readCoreMemory(0x03000000L, 0x8000)
+        private fun at(addr: Long) = if (addr >= 0x03000000L) iwram to (addr - 0x03000000L).toInt() else ewram to (addr - 0x02000000L).toInt()
+        fun read(addr: Long, size: Int): ByteArray { val (b, o) = at(addr); return b.copyOfRange(o, o + size) }
+        fun write(addr: Long, bytes: ByteArray) { val (b, o) = at(addr); bytes.copyInto(b, o) }
+    }
+
+    @Test
+    fun `a new wild foe is made shiny the way the game reads it`() {
+        // A PIKACHU Lv5 just made by setwildbattle, no battle yet (fixtures/hasep_wild/README.txt).
+        val s = HasepSymbols.parse(rom)!!
+        val cfg = hasepConfig(s, rom)
+        assertEquals(s["gEnemyParty"], cfg.enemyParty)
+        assertEquals(8, cfg.shinyBelow)
+        val target = ShinyOdds.targetFor(cfg, national = true)!!
+        val ram = Ram(FixtureMemoryReader.load("hasep_wild"))
+        val before = com.pokedaisy.app.companion.data.save.Gen3BoxMon.read(ram.read(target.enemyParty, 80), 0)
+        assertEquals(true, before.checksumOk)
+        assertEquals(25, before.species and 0x7FF)   // species:11 | teraType:5
+        // Odds of 1 in 1, so the roll always rewrites; two frames, as on the device.
+        val roller = ShinyOdds.Roller(target, java.util.Random(1))
+        val pokes = StringBuilder()
+        val writer = { a: Long, bytes: ByteArray ->
+            for (i in bytes.indices) pokes.append("poke8 0x%08X 0x%02X\n".format(a + i, bytes[i].toInt() and 0xFF))
+            ram.write(a, bytes); true
+        }
+        roller.tick(1, ram::read, writer)
+        roller.tick(1, ram::read, writer)
+        val after = com.pokedaisy.app.companion.data.save.Gen3BoxMon.read(ram.read(target.enemyParty, 80), 0)
+        assertEquals(true, after.checksumOk)
+        assertEquals(25, after.species and 0x7FF)
+        val shinyValue = ((after.otId ushr 16) xor (after.otId and 0xFFFF) xor (after.personality ushr 16) xor (after.personality and 0xFFFF))
+        assertEquals(true, shinyValue < 8)
+        assertEquals(before.personality % 25, after.personality % 25)   // the nature kept
+        // For the headless check: these pokes, then the game's own GetMonData(foe, MON_DATA_IS_SHINY).
+        java.io.File("build/hasep-shiny-pokes.txt").writeText(pokes.toString())
+    }
+}
+
+class HasepFoeTeamTest {
+    private val head: ByteArray = javaClass.classLoader!!.getResourceAsStream("fixtures/hasep_wild/rom_head.bin")!!.readBytes()
+    private val rom = { addr: Long, len: Int ->
+        val off = (addr - 0x08000000L).toInt()
+        ByteArray(len) { i -> head.getOrElse(off + i) { 0 } }
+    }
+
+    @Before fun setGame() { activeGame = GameKind.HEART_AND_SOUL }
+    @After fun resetGame() { activeGame = GameKind.FIRERED }
+
+    @Test
+    fun `a trainer battle shows the foe's whole team`() {
+        // Falkner from the debug menu (fixtures/hasep_trainer/README.txt): PIDGEY Lv8 out, NOCTOWL behind it.
+        val t = decodeNative("hasep_trainer", hasepConfig(HasepSymbols.parse(rom)!!, rom))
+        assertEquals(true, t.isTrainerBattle)
+        assertEquals(listOf(16, 164), t.enemyParty.map { it.species })
+        assertEquals("NOCTOWL", speciesNamesHns[t.enemyParty[1].species])
+        assertEquals(0, t.enemyActive)
+        assertEquals(false, t.enemyParty[0].shiny)
+    }
+}
+
+class HasepRepelTest {
+    private val head: ByteArray = javaClass.classLoader!!.getResourceAsStream("fixtures/hasep_wild/rom_head.bin")!!.readBytes()
+    private val rom = { addr: Long, len: Int ->
+        val off = (addr - 0x08000000L).toInt()
+        ByteArray(len) { i -> head.getOrElse(off + i) { 0 } }
+    }
+
+    @Test
+    fun `the bag offers the Repels, and nothing else`() {
+        // Checked headless on this build: AddBagItem(114), then the calls useFieldItem makes - VarSet(0x4021, 100: gItemsInfo
+        // [114]'s holdEffectParam), RemoveBagItem - the bag back to none, the counter 99 after a step.
+        val fns = hasepFieldItems(HasepSymbols.parse(rom)!!, rom)
+        assertEquals(setOf(114, 115, 116), fns.repelItems)
+        assertEquals(0x8000, fns.repelLureBit)
+        assertEquals(0x1D, fns.itemParamOff)
+        assertEquals(0x2C, fns.itemSize)
+        val support = fieldItemSupport(fns, rom)!!
+        assertEquals(true, support.canUse(114))
+        assertEquals(true, support.canUse(116))
+        assertEquals(false, support.canUse(28))   // POTION: no USE on a Pokémon in the expansion hacks
+        assertEquals(false, support.canTake)
+        // A Lure's steps aren't a Repel's: the bit set means none left for a Repel.
+        assertEquals(0, fns.repelSteps(0x8000 or 50))
+        assertEquals(50, fns.repelSteps(50))
+    }
+}

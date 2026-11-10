@@ -74,7 +74,7 @@ change to any of the places listed under "Where it's decided" updates its rows h
 | Glazed | 9.2.0 | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ ⁷ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ ¹⁹ | ✅ | ✅ ³³ |
 | GS Chronicles | 2.7.6 | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ ⁹ | — | ◐ ⁹ | ◐ ⁹ | ◐ ⁹ | ◐ ⁹ | — | — | ✅ ¹⁹ | ✅ | ✅ ³³ |
 | Heart and Soul | 2.0.6 | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | ◐ ⁶ | — | ✅ | ✅ | — | — | — | — | ✅ ³³ |
-| Hasep | 2.0.6.PLUS.10+ | ✅ ᴴ | ✅ | ✅ | ✅ | — | ✅ ᴴ | — | ◐ ⁶ | — | ✅ | ✅ ᴴ | — | — | — | — | ✅ ᴴ |
+| Hasep | 2.0.6.PLUS.11+ | ✅ ᴴ | ✅ | ✅ | ✅ | ◐ ᴴ | ✅ ᴴ | — | ✅ ᴴ | ✅ ᴴ | ✅ | ✅ ᴴ | — | — | ✅ ᴴ | — | ✅ ᴴ |
 | Lazarus | 2.0 | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ ¹⁹ | — | ✅ ³³ |
 | Modern Emerald | 3.6 | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
 | Monomyth | 1.0, 1.1 | ✅ ²³ | ✅ | ✅ | ✅ | — | — | — | ✅ ²³ | — | — ²³ | ✅ ²³ | — | — | — | — | — |
@@ -131,7 +131,9 @@ change to any of the places listed under "Where it's decided" updates its rows h
 5. RUN INDOORS doesn't apply: Ruby / Sapphire tell indoor maps by the map's type, which flash, weather and the region
    map read too. TEXT SPEED and AUTO-RUN work.
 6. TEXT SPEED and RUN INDOORS work, but AUTO-RUN can't tell a bike from walking there (no player state found; the sprite
-   ids it falls back on are Hoenn's / Kanto's), so it may hold B on one.
+   ids it falls back on are Hoenn's / Kanto's), so it may hold B on one. Heart and Soul: its gPlayerAvatar sits 0x30
+   before gObjectEvents (found on Hasep, note ᴴ; 2.0.6's build has it there too), which `playerAvatar` now tries, but
+   that's not been checked on Heart and Soul's own release, so its row stays.
 7. Glazed's first region only (Tunod, in Hoenn's map slots: Emerald's tables fly there); its Johto isn't in the
    table.
 8. The Game Boy games' switch drives their own party menus (`GbPartySwitch.kt`: Yellow's HandleMenuInput list, Crystal's
@@ -464,14 +466,23 @@ change to any of the places listed under "Where it's decided" updates its rows h
     (Heart and Soul lit 0x865, badge 0x880; SoulGold 0x9B4 / 0x993 and its cave byte at +0x16, `FlashFns.caveOff`), the
     badge from isUnlocked or the party menu (Lazarus's switch asks badge 3, 0x869). Each lit a dark cave of its own map
     table headless.
-ᴴ. Hasep (the fork's own, docs/HASEP_FORK.md): every address comes from the table its ROM carries, so each Hasep release
-    reads without a new app. Checked headless on a Hasep build (mgba_dump, the app's own calls at the table's addresses): the
-    party, bag, map and battle (HasepTest); PC anywhere (the storage menu over the bedroom, SEE YA!, the controls free);
-    FLY (IsFieldMoveUnlocked_Fly 1 with the badges, SetUpFieldMove_Fly 0 indoors and 1 outdoors, the heal-location warp to
-    Cherrygrove, the controls free on landing); FLASH (Dark Cave unlit: SetUpFieldMove_Flash 1 with
-    gPostMenuFieldCallback = FieldCallback_Flash, the light opened, FLAG_SYS_USE_FLASH set); EXPAND (Heart and Soul's
-    row with the table's addresses, `hasepWideRow`, through pk_wide_add_derived: the bedroom 59 of 60 frames' centre
-    exact, Cherrygrove 203 of 204, the first frame after a loaded state aside). Not tried on a device yet.
+ᴴ. Hasep (the fork's own, docs/HASEP_FORK.md): every address comes from the table its ROM carries (from 2.0.6.PLUS.11 on;
+    PLUS.10 and older have none), so each Hasep release reads without a new app. Checked headless on Hasep builds
+    (mgba_dump, the app's own calls at the table's addresses): the party, bag, map and battle (HasepTest); PC anywhere (the
+    storage menu over the bedroom, SEE YA!, the controls free); FLY (IsFieldMoveUnlocked_Fly 1 with the badges,
+    SetUpFieldMove_Fly 0 indoors and 1 outdoors, the heal-location warp to Cherrygrove, the controls free on landing);
+    FLASH (Dark Cave unlit: SetUpFieldMove_Flash 1 with gPostMenuFieldCallback = FieldCallback_Flash, the light opened,
+    FLAG_SYS_USE_FLASH set); EXPAND (Heart and Soul's row with the table's addresses, `hasepWideRow`, through
+    pk_wide_add_derived: the bedroom 59 of 60 frames' centre exact, Cherrygrove 203 of 204, the first frame after a loaded
+    state aside). Field reads and Bike / surf: its gPlayerAvatar sits 0x30 before gObjectEvents (`playerAvatar`'s third
+    place; Heart and Soul 2.0.6's build keeps it there too), `fieldinfo` read avatar / bike 0 / 0 before and 1 / 1 after
+    with GetOnOffBike. Field items: the Repels only (SoulGold's way, `bagActions` false: expansion's ids 114..116 and Lure
+    bit from the table, the steps at gItemsInfo +0x1D; the calls `useFieldItem` makes, run headless, gave 100 steps, the
+    bag back to none, 99 after a step; HasepRepelTest). SHINY ODDS and the FOE TEAM: gEnemyParty / gBattlerPartyIndexes /
+    gBattleStruct and SHINY_ODDS (8: what the game draws; Hasep's challenge option changes a new Pokemon's odds, not
+    that) from the table, BoxPokemon's forced-shiny bit at +0x1F; a setwildbattle PIKACHU rewritten by `ShinyOdds.Roller`
+    (HasepShinyTest) read shiny by the game's own GetMonData(MON_DATA_IS_SHINY) and drawn shiny in battle, the same foe
+    unpatched neither; Falkner's PIDGEY / NOCTOWL as the FOE TEAM (HasepFoeTeamTest). Not tried on a device yet.
 
 ## What each column is
 

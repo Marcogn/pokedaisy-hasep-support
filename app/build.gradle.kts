@@ -75,8 +75,8 @@ android {
         // Bump both for every GitHub release: the updater compares versionName
         // against the release tag (v<versionName>), Android needs versionCode to grow.
         // The fork: PokeDaisy's version plus a fourth part (AppUpdater.upstreamBase), versionCode upstream's * 100 + it.
-        versionCode = 1901
-        versionName = "1.5.0.1"
+        versionCode = 1902
+        versionName = "1.5.0.2"
         // Whether this build can send crash reports at all (CrashReports.available).
         buildConfigField("boolean", "CRASHLYTICS", crashlytics.toString())
         buildConfigField("String", "SCREENSCRAPER_DEV_ID", "\"${buildSecret("screenscraper.devId", "SCREENSCRAPER_DEV_ID")}\"")

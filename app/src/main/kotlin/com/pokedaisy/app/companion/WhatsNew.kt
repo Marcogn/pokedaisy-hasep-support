@@ -24,6 +24,17 @@ object WhatsNew {
     val RELEASES: List<Notes> = listOf(
         // The Hasep fork (docs/HASEP_FORK.md): its own builds on top of PokeDaisy's.
         Notes(
+            "1.5.0.2",
+            listOf(
+                Section(
+                    NEW,
+                    listOf(
+                        "Hasep: bike and surf speeds, the foe's whole team in a battle, SHINY ODDS and the Repels from the bag (Hasep 2.0.6.PLUS.11 and later).",
+                    ),
+                ),
+            ),
+        ),
+        Notes(
             "1.5.0.1",
             listOf(
                 Section(
