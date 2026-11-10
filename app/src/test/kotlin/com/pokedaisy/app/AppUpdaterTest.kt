@@ -35,13 +35,13 @@ class AppUpdaterTest {
     }
 
     @Test
-    fun `the Hasep fork's versions are upstream's plus a fourth part`() {
-        assertTrue(AppUpdater.isNewer("1.5.0.2", "1.5.0.1"))
-        assertTrue(AppUpdater.isNewer("1.6.0.1", "1.5.0.9"))
-        assertEquals("1.5.0", AppUpdater.upstreamBase("1.5.0.1"))
-        assertEquals("1.5.0", AppUpdater.upstreamBase("1.5.0.1-rc.1"))
-        // PokeDaisy 1.5.1 is news for a fork build on 1.5.0, 1.5.0 itself isn't.
-        assertTrue(AppUpdater.isNewer("1.5.1", AppUpdater.upstreamBase("1.5.0.3")))
-        assertFalse(AppUpdater.isNewer("1.5.0", AppUpdater.upstreamBase("1.5.0.3")))
+    fun `the Hasep fork's versions are upstream's plus one part`() {
+        // PokeDaisy 1.5.0.1 (a hotfix's fourth part) -> the fork's 1.5.0.1.1, .2...; PokeDaisy 1.5.1 -> 1.5.1.1.
+        assertTrue(AppUpdater.isNewer("1.5.0.1.2", "1.5.0.1.1"))
+        assertTrue(AppUpdater.isNewer("1.5.1.1", "1.5.0.1.9"))
+        assertTrue(AppUpdater.isNewer("1.5.0.2.1", "1.5.0.1.9"))
+        // The notice compares PokeDaisy's releases with the one merged in (BuildConfig.UPSTREAM_VERSION).
+        assertTrue(AppUpdater.isNewer("1.5.1", "1.5.0.1"))
+        assertFalse(AppUpdater.isNewer("1.5.0.1", "1.5.0.1"))
     }
 }

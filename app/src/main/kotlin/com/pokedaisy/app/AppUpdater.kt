@@ -60,11 +60,9 @@ object AppUpdater {
 
     fun isNewer(candidate: String, current: String): Boolean = compareVersions(candidate, current) > 0
 
-    /** The fork's versions are PokeDaisy's plus a fourth part (1.5.0.2 = the second Hasep build on PokeDaisy 1.5.0). */
-    fun upstreamBase(version: String): String = version.substringBefore('-').split('.').take(3).joinToString(".")
-
-    /** PokeDaisy's newest release when it's newer than the one this fork build is merged up to, or null. Blocking. */
-    fun checkUpstream(current: String): Release? = check(upstreamBase(current), UPSTREAM_REPO)
+    /** PokeDaisy's newest release when it's newer than [merged], the one this fork build is built on
+     * (BuildConfig.UPSTREAM_VERSION: the fork's own version is that plus one part), or null. Blocking. */
+    fun checkUpstream(merged: String): Release? = check(merged, UPSTREAM_REPO)
 
     /**
      * Semantic-version order: `1.0.0-beta.1` < `1.0.0-beta.2` < `1.0.0-rc.1` < `1.0.0`

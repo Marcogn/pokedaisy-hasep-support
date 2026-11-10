@@ -20,62 +20,76 @@ object WhatsNew {
     const val NEW = "NEW"
     const val FIXES = "FIXES"
 
+    /**
+     * A hotfix (a fourth version part: 1.5.0.1) is its release's notes again, its own [line] first under FIXES (the
+     * user's call: the same WHAT'S NEW, saying it's a hotfix). A player who saw the release's notes isn't shown them
+     * again ([due]).
+     */
+    private fun hotfix(version: String, of: Notes, line: String): Notes {
+        val fixes = of.sections.firstOrNull { it.title == FIXES }
+        val sections = if (fixes == null) of.sections + Section(FIXES, listOf(line))
+        else of.sections.map { if (it === fixes) Section(FIXES, listOf(line) + it.items) else it }
+        return Notes(version, sections)
+    }
+
+    /** A hotfix's release (1.5.0.1 -> 1.5.0); any other version itself. */
+    fun releaseOf(version: String): String = version.split('.').let { if (it.size > 3) it.take(3).joinToString(".") else version }
+
     /** Newest first. */
-    val RELEASES: List<Notes> = listOf(
-        // The Hasep fork (docs/HASEP_FORK.md): its own builds on top of PokeDaisy's.
-        Notes(
-            "1.5.0.2",
-            listOf(
-                Section(
-                    NEW,
-                    listOf(
-                        "Hasep: bike and surf speeds, the foe's whole team in a battle, SHINY ODDS and the Repels from the bag (Hasep 2.0.6.PLUS.11 and later).",
+    val RELEASES: List<Notes> by lazy {
+        // The Hasep fork (docs/HASEP_FORK.md): its own builds on top of PokeDaisy's, newest first.
+        listOf(
+            Notes(
+                "1.5.0.1.1",
+                listOf(
+                    Section(
+                        NEW,
+                        listOf(
+                            "Hasep: the Heart and Soul fork, from 2.0.6.PLUS.11, read through the table of addresses its ROM carries, with EXPAND, FLY, FLASH and the PC anywhere.",
+                            "Hasep: bike and surf speeds, the foe's whole team in a battle, SHINY ODDS and the Repels from the bag.",
+                            "Updates: this app updates from the Hasep fork's releases, and says when PokeDaisy itself has a new version.",
+                        ),
                     ),
+                    Section(FIXES, listOf("PokeDaisy 1.5.0.1: turning a Samsung Galaxy sideways no longer closes the game.")),
+                ),
+            ),
+        ) + listOf(hotfix("1.5.0.1", NOTES_1_5_0, "1.5.0.1 HOTFIX: turning a Samsung Galaxy sideways no longer closes the game.")) +
+            OLDER
+    }
+
+    private val NOTES_1_5_0 = Notes(
+        "1.5.0",
+        listOf(
+            Section(
+                NEW,
+                listOf(
+                    "New games: Monomyth v1.1, Yellow Legacy, Crystal Legacy, Renegade Platinum and Modern Emerald.",
+                    "Korean: the whole app in Korean.",
+                    "Fresh look: a refreshed HUD, quick menu and battle buttons, with new animations.",
+                    "DS in more languages: HeartGold to White 2 in French, German, Spanish, Italian, Japanese and Korean, and Platinum in Spanish.",
+                    "DS on one screen: menus load faster, behind a steady picture instead of the fades.",
+                    "CHEATS on DS: Action Replay DS codes.",
+                    "INSTANT TEXT: the GBA games' dialogue shows all at once.",
+                    "BATTLE STYLE: a Gen 5 battle screen for the companion, beside the Gen 4 one.",
+                    "Field moves: teach TMs from the bag, FLASH from the quick menu, and the whole PC menu anywhere.",
+                    "Library: search your games, show SUPPORTED ONLY, and ADD TO HOME for a game's own icon.",
+                    "FOLD LAYOUT: a half open foldable puts the game and the companion on either side of the hinge.",
+                    "Touch controls: new layouts, looks and colours, X and Y buttons, and Delta skins.",
+                ),
+            ),
+            Section(
+                FIXES,
+                listOf(
+                    "SoulGold: switching Pokémon from the companion follows your PARTY MENU option.",
+                    "Smoother play: steadier frames on the RG DS and other screens that tick unevenly.",
+                    "Unbound: no more white box behind the text boxes with EXPAND on.",
                 ),
             ),
         ),
-        Notes(
-            "1.5.0.1",
-            listOf(
-                Section(
-                    NEW,
-                    listOf(
-                        "Hasep: the Heart and Soul fork, every release, read through the table of addresses its ROM carries, with EXPAND, FLY, FLASH and the PC anywhere.",
-                        "Updates: this app updates from the Hasep fork's releases, and says when PokeDaisy itself has a new version.",
-                    ),
-                ),
-            ),
-        ),
-        Notes(
-            "1.5.0",
-            listOf(
-                Section(
-                    NEW,
-                    listOf(
-                        "New games: Monomyth v1.1, Yellow Legacy, Crystal Legacy, Renegade Platinum and Modern Emerald.",
-                        "Korean: the whole app in Korean.",
-                        "Fresh look: a refreshed HUD, quick menu and battle buttons, with new animations.",
-                        "DS in more languages: HeartGold to White 2 in French, German, Spanish, Italian, Japanese and Korean, and Platinum in Spanish.",
-                        "DS on one screen: menus load faster, behind a steady picture instead of the fades.",
-                        "CHEATS on DS: Action Replay DS codes.",
-                        "INSTANT TEXT: the GBA games' dialogue shows all at once.",
-                        "BATTLE STYLE: a Gen 5 battle screen for the companion, beside the Gen 4 one.",
-                        "Field moves: teach TMs from the bag, FLASH from the quick menu, and the whole PC menu anywhere.",
-                        "Library: search your games, show SUPPORTED ONLY, and ADD TO HOME for a game's own icon.",
-                        "FOLD LAYOUT: a half open foldable puts the game and the companion on either side of the hinge.",
-                        "Touch controls: new layouts, looks and colours, X and Y buttons, and Delta skins.",
-                    ),
-                ),
-                Section(
-                    FIXES,
-                    listOf(
-                        "SoulGold: switching Pokémon from the companion follows your PARTY MENU option.",
-                        "Smoother play: steadier frames on the RG DS and other screens that tick unevenly.",
-                        "Unbound: no more white box behind the text boxes with EXPAND on.",
-                    ),
-                ),
-            ),
-        ),
+    )
+
+    private val OLDER: List<Notes> = listOf(
+        NOTES_1_5_0,
         Notes(
             "1.4.0",
             listOf(
@@ -160,5 +174,9 @@ object WhatsNew {
      * player hasn't seen them for ([lastSeen]: Prefs.whatsNewSeen), and that version has notes.
      */
     fun due(current: String, lastSeen: String?, updated: Boolean): Notes? =
-        if (updated && lastSeen != current) notesFor(current) else null
+        if (updated && lastSeen != current && (isForkBuild(current) || lastSeen?.let(::releaseOf) != releaseOf(current))) notesFor(current) else null
+
+    /** A Hasep fork build (PokeDaisy's version plus one part, past the hotfix's four): every one has notes of its own,
+     * so it isn't a hotfix of the one before. */
+    private fun isForkBuild(version: String) = version.split('.').size > 4
 }

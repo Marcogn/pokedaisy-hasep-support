@@ -49,17 +49,20 @@ headless on a Hasep build (docs/ROM_FEATURES.md's footnote ᴴ); none was tried 
 
 ## Versions
 
-`versionName` is the upstream version plus a fourth part: `1.5.0.1` is the first fork build on PokeDaisy 1.5.0, and
-after merging PokeDaisy 1.6.0 the next one is `1.6.0.1`. `versionCode` is upstream's times 100 plus that part
-(PokeDaisy 1.5.0 is 19, so 1901). `AppUpdater.upstreamBase` takes the first three parts back, which is what the
-upstream notice compares against `lidor30/pokedaisy`'s releases.
+`versionName` is PokeDaisy's version plus one more part: `1.5.0.1.1` is the first fork build on PokeDaisy 1.5.0.1
+(PokeDaisy's own hotfixes have four parts, so the fork's part is always the last, whatever PokeDaisy's length).
+PokeDaisy's version merged in is `BuildConfig.UPSTREAM_VERSION` (app/build.gradle.kts), which the upstream notice
+compares with `lidor30/pokedaisy`'s releases. `versionCode` is PokeDaisy's times 100 plus the fork's part (PokeDaisy
+1.5.0.1 is 20, so 2001). Both only grow, since PokeDaisy's do. After merging PokeDaisy X, set `UPSTREAM_VERSION` to X,
+`versionName` to X.1 and `versionCode` to X's * 100 + 1; a later fork build on the same X bumps the last part.
+WHAT'S NEW: a fork build has notes of its own (`WhatsNew.isForkBuild`), above PokeDaisy's.
 
 ## Merging upstream
 
 ```sh
 git remote add upstream https://github.com/lidor30/pokedaisy   # once
-git fetch upstream
-git merge upstream/main
+git fetch upstream --tags
+git merge v<PokeDaisy version>   # a release tag, not main: main may hold unreleased work
 # conflicts: keep upstream's side, then put the fork's lines above back in;
 # versionCode / versionName: upstream's new ones turned into the fork's scheme
 make gamedata && make test-quick
