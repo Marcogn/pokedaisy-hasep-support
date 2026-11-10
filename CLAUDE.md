@@ -1,5 +1,14 @@
 # PokeDaisy — Project Notes for Claude
 
+## This repo is the Hasep fork (Marcogn/pokedaisy-hasep-support)
+
+PokeDaisy plus support for Hasep (Marcogn/pokehns-expansion-plus), a Heart and Soul fork whose ROM carries a table of
+its own addresses (`HASEPSYM`). **Read `docs/HASEP_FORK.md` first**: what the fork changes (keep it small and in its own
+files: `companion/data/Hasep.kt`, a hook each in Poller / Flash / MonArt / PokeDaisyActivity / ActiveTables), how to
+merge upstream (`lidor30/pokedaisy`), the version scheme (`<upstream>.<n>`, `applicationId` `com.pokedaisy.hasep`) and
+releasing. The attribution to PokeDaisy (NOTICE, README, the app's credits) stays, as the license requires. The notes
+below are upstream's and apply as they are.
+
 Dual-screen Android app (AYN Thor, Retroid Pocket Duo): an embedded libmgba core on the
 top screen and a live companion for Gen 3 Pokémon games and ROM hacks on the bottom
 screen. Read `README.md` for the user-facing feature list and `docs/DEVELOPMENT.md` for the

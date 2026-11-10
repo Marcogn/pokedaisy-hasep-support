@@ -67,13 +67,16 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "com.pokedaisy.app"
+        // The Hasep fork (Marcogn/pokedaisy-hasep-support): its own id, so it installs beside PokeDaisy and updates
+        // from the fork's releases under the fork's key (Android refuses an update signed by another key).
+        applicationId = "com.pokedaisy.hasep"
         minSdk = 26
         targetSdk = 34
         // Bump both for every GitHub release: the updater compares versionName
         // against the release tag (v<versionName>), Android needs versionCode to grow.
-        versionCode = 19
-        versionName = "1.5.0"
+        // The fork: PokeDaisy's version plus a fourth part (AppUpdater.upstreamBase), versionCode upstream's * 100 + it.
+        versionCode = 1901
+        versionName = "1.5.0.1"
         // Whether this build can send crash reports at all (CrashReports.available).
         buildConfigField("boolean", "CRASHLYTICS", crashlytics.toString())
         buildConfigField("String", "SCREENSCRAPER_DEV_ID", "\"${buildSecret("screenscraper.devId", "SCREENSCRAPER_DEV_ID")}\"")

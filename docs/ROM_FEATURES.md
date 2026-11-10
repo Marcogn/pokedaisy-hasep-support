@@ -74,6 +74,7 @@ change to any of the places listed under "Where it's decided" updates its rows h
 | Glazed | 9.2.0 | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ ⁷ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ ¹⁹ | ✅ | ✅ ³³ |
 | GS Chronicles | 2.7.6 | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ ⁹ | — | ◐ ⁹ | ◐ ⁹ | ◐ ⁹ | ◐ ⁹ | — | — | ✅ ¹⁹ | ✅ | ✅ ³³ |
 | Heart and Soul | 2.0.6 | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | ◐ ⁶ | — | ✅ | ✅ | — | — | — | — | ✅ ³³ |
+| Hasep | 2.0.6.PLUS.10+ | ✅ ᴴ | ✅ | ✅ | ✅ | — | ✅ ᴴ | — | ◐ ⁶ | — | ✅ | ✅ ᴴ | — | — | — | — | ✅ ᴴ |
 | Lazarus | 2.0 | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ ¹⁹ | — | ✅ ³³ |
 | Modern Emerald | 3.6 | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
 | Monomyth | 1.0, 1.1 | ✅ ²³ | ✅ | ✅ | ✅ | — | — | — | ✅ ²³ | — | — ²³ | ✅ ²³ | — | — | — | — | — |
@@ -463,6 +464,14 @@ change to any of the places listed under "Where it's decided" updates its rows h
     (Heart and Soul lit 0x865, badge 0x880; SoulGold 0x9B4 / 0x993 and its cave byte at +0x16, `FlashFns.caveOff`), the
     badge from isUnlocked or the party menu (Lazarus's switch asks badge 3, 0x869). Each lit a dark cave of its own map
     table headless.
+ᴴ. Hasep (the fork's own, docs/HASEP_FORK.md): every address comes from the table its ROM carries, so each Hasep release
+    reads without a new app. Checked headless on a Hasep build (mgba_dump, the app's own calls at the table's addresses): the
+    party, bag, map and battle (HasepTest); PC anywhere (the storage menu over the bedroom, SEE YA!, the controls free);
+    FLY (IsFieldMoveUnlocked_Fly 1 with the badges, SetUpFieldMove_Fly 0 indoors and 1 outdoors, the heal-location warp to
+    Cherrygrove, the controls free on landing); FLASH (Dark Cave unlit: SetUpFieldMove_Flash 1 with
+    gPostMenuFieldCallback = FieldCallback_Flash, the light opened, FLAG_SYS_USE_FLASH set); EXPAND (Heart and Soul's
+    row with the table's addresses, `hasepWideRow`, through pk_wide_add_derived: the bedroom 59 of 60 frames' centre
+    exact, Cherrygrove 203 of 204, the first frame after a loaded state aside). Not tried on a device yet.
 
 ## What each column is
 

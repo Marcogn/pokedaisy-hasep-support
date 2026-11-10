@@ -402,7 +402,7 @@ val activeItemNames: Map<Int, String> get() = localText?.items ?: when {
     seaglass -> itemNamesSeaglass
     celia -> itemNamesCelia
     tmt2 -> itemNamesTmt2
-    hns -> itemNamesHns
+    hns -> if (runningHasep != null) itemNamesHasep else itemNamesHns
     lazarus -> itemNamesLazarus
     soulGold -> if (soulGoldV12) itemNamesSoulGoldV12 else itemNamesSoulGold
     rogue -> itemNamesRogue

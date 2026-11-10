@@ -135,6 +135,9 @@ private fun cfruBadgeFn(check: Long, b: ByteArray, read: (addr: Long, len: Int) 
 /** Every table that may fit: [flashFnsFor]'s, or for games whose builds share a kind and game code all of their builds'
  * (Recharged Emerald's three, [rebuild]; SoulGold's five) - the code CRCs pick. */
 fun flashCandidatesFor(kind: GameKind?, gameCode: String, revision: Int, rebuild: Boolean): List<FlashFns> = when {
+    // Hasep: its own table's addresses (Hasep.kt), the ROM read where the activity reads it.
+    kind == GameKind.HEART_AND_SOUL && runningHasep != null ->
+        listOf(hasepFlash(runningHasep!!) { a, n -> InProcessReader.readCoreMemory(a, n) })
     rebuild -> if (kind == GameKind.EMERALD && gameCode == "BPEE")
         listOf(FLASH_RECHARGED_EMERALD_V2_2_5, FLASH_RECHARGED_EMERALD_V2_2_8, FLASH_RECHARGED_EMERALD_REBALANCED_V2_2_8) else emptyList()
     kind == GameKind.SOULGOLD -> if (gameCode == "BPEE") listOf(

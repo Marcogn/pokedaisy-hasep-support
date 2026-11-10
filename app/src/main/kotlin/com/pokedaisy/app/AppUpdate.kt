@@ -58,6 +58,8 @@ class AppUpdateFlow(private val activity: ComponentActivity) {
         checking = true
         Thread({
             val found = AppUpdater.check(BuildConfig.VERSION_NAME)
+            // The Hasep fork: say once per version when PokeDaisy itself has moved on (a merge to ask for).
+            val upstream = if (found == null) AppUpdater.checkUpstream(BuildConfig.VERSION_NAME) else null
             // An APK we already offered is spent once it's installed (or abandoned) - but the one for the
             // release still on offer is kept, so UPDATE installs it at once instead of downloading it again.
             updatesDir.listFiles()?.forEach { if (pendingApk != it && (found == null || it.name != apkName(found))) it.delete() }
@@ -66,11 +68,25 @@ class AppUpdateFlow(private val activity: ComponentActivity) {
                 if (found != null) {
                     error = null
                     release = found
+                } else if (upstream != null && (manual || upstreamNoticeWanted(upstream.version))) {
+                    Toast.makeText(
+                        activity,
+                        "PokeDaisy ${upstream.version} è uscito (questa build è su ${AppUpdater.upstreamBase(BuildConfig.VERSION_NAME)}): chiedi il merge nel fork Hasep",
+                        Toast.LENGTH_LONG,
+                    ).show()
                 } else if (manual) {
                     Toast.makeText(activity, tr("PokéDaisy {0} is the newest version", BuildConfig.VERSION_NAME), Toast.LENGTH_SHORT).show()
                 }
             }
         }, "pokedaisy-update-check").apply { isDaemon = true; start() }
+    }
+
+    /** True the first time a given upstream version is seen (then remembered), so the notice isn't on every launch. */
+    private fun upstreamNoticeWanted(version: String): Boolean {
+        val prefs = activity.getSharedPreferences("hasep_fork", android.content.Context.MODE_PRIVATE)
+        if (prefs.getString("upstreamNotified", null) == version) return false
+        prefs.edit().putString("upstreamNotified", version).apply()
+        return true
     }
 
     fun dismiss() {
