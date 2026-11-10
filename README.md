@@ -1,3 +1,12 @@
+> **This is the Hasep fork of PokeDaisy** ([Marcogn/pokedaisy-hasep-support](https://github.com/Marcogn/pokedaisy-hasep-support)).
+> Based on PokeDaisy by Lidor Itzhari - https://github.com/lidor30/pokedaisy
+>
+> It adds one thing: support for **Hasep** ([Marcogn/pokehns-expansion-plus](https://github.com/Marcogn/pokehns-expansion-plus)),
+> a fork of Heart and Soul whose ROM carries its own table of addresses, so every Hasep release works without a new app.
+> It installs beside PokeDaisy (its own app id, `com.pokedaisy.hasep`) and updates from this fork's releases.
+> Everything else is PokeDaisy's, merged in as it's released: see [docs/HASEP_FORK.md](docs/HASEP_FORK.md).
+> Please report problems with Hasep here, not to PokeDaisy.
+
 <div align="center">
 
 <img src="https://pokedaisy.com/og.png" alt="PokeDaisy: Game Boy, Game Boy Color, GBA and DS player with a live companion, on two screens or one, for Pokemon games and ROM hacks, free and open source" width="100%">
@@ -161,6 +170,7 @@ shows a "not supported" notice).
 | Gaia                           | 3.2                        |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Odyssey                        | 4.1.1                      |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Heart and Soul                 | 2.0.6                      |  ✅   | ✅  |   ✅   | ✅  |   ✅    |  ✅   |
+| Hasep (Heart and Soul fork)    | 2.0.6.PLUS.10 and later    |  ✅   | ✅  |   ✅   | ✅  |   ✅    |  ✅   |
 | Amethyst                       | 1.3.0, 1.4.1               |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Celia's Stupid Romhack         | 1.1.4                      |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Orange Islands                 | Beta 5.7, an older beta    |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |

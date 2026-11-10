@@ -394,6 +394,7 @@ class TelemetrySampler {
     }
 
     private fun detect(reader: MemoryReader) {
+        runningHasep = null
         when (runCatching { MgbaCore.pkPlatform() }.getOrDefault(0)) {
             MgbaCore.PLATFORM_GB -> return detectGameBoy()
             MgbaCore.PLATFORM_NDS -> return detectDs()
@@ -549,6 +550,15 @@ class TelemetrySampler {
         // Emerald's addresses would show silently wrong data for a real hack.
         if (code == "BPEE" && size > 0x1000000L) {
             val hash = runCatching { romHash(reader, size) }.getOrNull()
+            // Hasep: no hash to match (every build is new), its own table of addresses instead (Hasep.kt).
+            val hasep = HasepSymbols.parse { a, n -> reader.readCoreMemory(a, n) }
+            if (hasep != null) {
+                runningHasep = hasep
+                kind = GameKind.HEART_AND_SOUL
+                nativeCfg = hasepConfig(hasep) { a, n -> reader.readCoreMemory(a, n) }
+                ramVerified = true   // the build's own linker wrote the addresses (checked headless on a new game)
+                return
+            }
             when (hash) {
                 HEART_AND_SOUL_V2_0_6_SHA1 -> { kind = GameKind.HEART_AND_SOUL; nativeCfg = NATIVE_HEART_AND_SOUL }
                 LAZARUS_V2_0_SHA1 -> { kind = GameKind.LAZARUS; nativeCfg = NATIVE_LAZARUS }

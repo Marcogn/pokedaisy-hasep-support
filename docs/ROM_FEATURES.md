@@ -74,6 +74,7 @@ change to any of the places listed under "Where it's decided" updates its rows h
 | Glazed | 9.2.0 | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ ⁷ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ ¹⁹ | ✅ | ✅ ³³ |
 | GS Chronicles | 2.7.6 | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ ⁹ | — | ◐ ⁹ | ◐ ⁹ | ◐ ⁹ | ◐ ⁹ | — | — | ✅ ¹⁹ | ✅ | ✅ ³³ |
 | Heart and Soul | 2.0.6 | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | ◐ ⁶ | — | ✅ | ✅ | — | — | — | — | ✅ ³³ |
+| Hasep | 2.0.6.PLUS.10+ | — ᴴ | ✅ | ✅ | ✅ | — | ◐ ᴴ | — | ◐ ⁶ | — | ✅ | ✅ ᴴ | — | — | — | — | ◐ ᴴ |
 | Lazarus | 2.0 | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ ¹⁹ | — | ✅ ³³ |
 | Modern Emerald | 3.6 | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
 | Monomyth | 1.0, 1.1 | ✅ ²³ | ✅ | ✅ | ✅ | — | — | — | ✅ ²³ | — | — ²³ | ✅ ²³ | — | — | — | — | — |
@@ -463,6 +464,11 @@ change to any of the places listed under "Where it's decided" updates its rows h
     (Heart and Soul lit 0x865, badge 0x880; SoulGold 0x9B4 / 0x993 and its cave byte at +0x16, `FlashFns.caveOff`), the
     badge from isUnlocked or the party menu (Lazarus's switch asks badge 3, 0x869). Each lit a dark cave of its own map
     table headless.
+ᴴ. Hasep (the fork's own, docs/HASEP_FORK.md): every address comes from the table its ROM carries, so each Hasep release
+    reads without a new app. The party, bag, map and battle were checked headless on a Hasep build (HasepTest); PC anywhere
+    too (mgba_dump: the five-command script at gHasepAppScratch + 4, ScriptContext_SetupScript, the storage menu over the
+    bedroom, SEE YA! and the controls free again). FLY and FLASH call Heart and Soul's functions at the table's addresses,
+    their CRCs taken from the ROM itself, and haven't been tried yet. EXPAND needs its native table (`pk_wide_games.h`) fed from the table: not yet.
 
 ## What each column is
 

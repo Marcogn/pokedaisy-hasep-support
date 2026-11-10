@@ -33,4 +33,15 @@ class AppUpdaterTest {
         assertFalse(AppUpdater.isNewer("1.0.0-beta.1", "1.0.0-beta.1"))
         assertFalse(AppUpdater.isNewer("0.9.0", "1.0.0-beta.1"))
     }
+
+    @Test
+    fun `the Hasep fork's versions are upstream's plus a fourth part`() {
+        assertTrue(AppUpdater.isNewer("1.5.0.2", "1.5.0.1"))
+        assertTrue(AppUpdater.isNewer("1.6.0.1", "1.5.0.9"))
+        assertEquals("1.5.0", AppUpdater.upstreamBase("1.5.0.1"))
+        assertEquals("1.5.0", AppUpdater.upstreamBase("1.5.0.1-rc.1"))
+        // PokeDaisy 1.5.1 is news for a fork build on 1.5.0, 1.5.0 itself isn't.
+        assertTrue(AppUpdater.isNewer("1.5.1", AppUpdater.upstreamBase("1.5.0.3")))
+        assertFalse(AppUpdater.isNewer("1.5.0", AppUpdater.upstreamBase("1.5.0.3")))
+    }
 }

@@ -22,6 +22,19 @@ object WhatsNew {
 
     /** Newest first. */
     val RELEASES: List<Notes> = listOf(
+        // The Hasep fork (docs/HASEP_FORK.md): its own builds on top of PokeDaisy's.
+        Notes(
+            "1.5.0.1",
+            listOf(
+                Section(
+                    NEW,
+                    listOf(
+                        "Hasep: the Heart and Soul fork, every release, read through the table of addresses its ROM carries.",
+                        "Updates: this app updates from the Hasep fork's releases, and says when PokeDaisy itself has a new version.",
+                    ),
+                ),
+            ),
+        ),
         Notes(
             "1.5.0",
             listOf(

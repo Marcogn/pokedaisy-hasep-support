@@ -13,8 +13,11 @@ import java.net.URL
  */
 object AppUpdater {
 
-    const val REPO = "lidor30/pokedaisy"
+    /** The Hasep fork's releases: what this build installs (its own applicationId and signing key). */
+    const val REPO = "Marcogn/pokedaisy-hasep-support"
     const val RELEASES_PAGE = "https://github.com/$REPO/releases"
+    /** PokeDaisy itself: only watched, never installed - a new version there means the fork wants a merge. */
+    const val UPSTREAM_REPO = "lidor30/pokedaisy"
 
     class Release(
         val version: String,
@@ -25,8 +28,8 @@ object AppUpdater {
     )
 
     /** The newest release that is newer than [current], or null (none, or offline). Blocking. */
-    fun check(current: String): Release? = runCatching {
-        val conn = (URL("https://api.github.com/repos/$REPO/releases?per_page=20").openConnection() as HttpURLConnection).apply {
+    fun check(current: String, repo: String = REPO): Release? = runCatching {
+        val conn = (URL("https://api.github.com/repos/$repo/releases?per_page=20").openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 8000
             setRequestProperty("Accept", "application/vnd.github+json")
@@ -56,6 +59,12 @@ object AppUpdater {
     }
 
     fun isNewer(candidate: String, current: String): Boolean = compareVersions(candidate, current) > 0
+
+    /** The fork's versions are PokeDaisy's plus a fourth part (1.5.0.2 = the second Hasep build on PokeDaisy 1.5.0). */
+    fun upstreamBase(version: String): String = version.substringBefore('-').split('.').take(3).joinToString(".")
+
+    /** PokeDaisy's newest release when it's newer than the one this fork build is merged up to, or null. Blocking. */
+    fun checkUpstream(current: String): Release? = check(upstreamBase(current), UPSTREAM_REPO)
 
     /**
      * Semantic-version order: `1.0.0-beta.1` < `1.0.0-beta.2` < `1.0.0-rc.1` < `1.0.0`

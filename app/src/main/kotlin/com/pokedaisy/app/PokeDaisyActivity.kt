@@ -1303,7 +1303,8 @@ class PokeDaisyActivity : Activity() {
         // Heart and Soul: gPartyMenu found by its slotId walking 0 -> 7 -> 0 with one Pokémon (CANCEL at 7); a list
         // (DOWN 0 -> 1 with three). Headless: a written POKéMON cell opened it, DOWN, A, SHIFT sent slot 1 in.
         game == com.pokedaisy.app.companion.data.GameKind.HEART_AND_SOUL ->
-            BattleInputController.SwitchAddrs(partyMenu = 0x020341FCL, party = 0x02034764L)
+            com.pokedaisy.app.companion.data.runningHasep?.let { BattleInputController.SwitchAddrs(partyMenu = it["gPartyMenu"], party = it["gPlayerParty"]) }
+                ?: BattleInputController.SwitchAddrs(partyMenu = 0x020341FCL, party = 0x02034764L)
         // Celia: gPartyMenu found by its slotId (0 -> 7 -> 0 with one Pokémon), a list; its gPlayerParty is
         // FireRed's moved (NATIVE_CELIA). Headless: DOWN, A, SHIFT with three put slot 1 into gBattlerPartyIndexes[0].
         game == com.pokedaisy.app.companion.data.GameKind.CELIA ->

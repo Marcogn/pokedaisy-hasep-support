@@ -21,6 +21,12 @@ It must appear (1) in this NOTICE file, kept with the source; (2) in the
 work's README or equivalent documentation; and (3) where the work shows
 credits, an "About" screen or other Appropriate Legal Notices, there too.
 
+MODIFICATIONS (GNU GPL version 3, section 5(a))
+
+This is a modified version: the Hasep fork (https://github.com/Marcogn/pokedaisy-hasep-support),
+changed from 2026-11-10 on to read Hasep, a Heart and Soul fork, through the table of addresses its
+ROM carries, and to update from the fork's own releases (docs/HASEP_FORK.md lists every change).
+
 THIRD-PARTY COMPONENTS
 
 The app shows every license below in full under Settings > LICENSES.

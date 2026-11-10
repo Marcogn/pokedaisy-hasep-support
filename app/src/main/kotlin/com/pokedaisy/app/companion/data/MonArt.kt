@@ -79,7 +79,13 @@ object MonArt {
      * by PIKACHU's overworld record checking out.
      */
     private fun heartAndSoul(r: Rom): Reader? {
-        val base = 0x7E6544; val stride = 0x10C; val ow = 0xB0
+        // Hasep: gSpeciesInfo where its own table says (Hasep.kt); the records are Heart and Soul's.
+        val hasep = HasepSymbols.parse { a, n ->
+            val o = (a - 0x08000000L).toInt()
+            if (o < 0 || o + n > r.b.size) throw IndexOutOfBoundsException() else r.b.copyOfRange(o, o + n)
+        }
+        val base = hasep?.let { (it["gSpeciesInfo"] - 0x08000000L).toInt() } ?: 0x7E6544
+        val stride = 0x10C; val ow = 0xB0
         val pika = base + 25 * stride + ow
         if (!(r.u16(pika) == 0xFFFF && r.u16(pika + 6) == 512 && r.u16(pika + 8) == 32 && r.u16(pika + 10) == 32)) return null
         return Reader(Source.HEART_AND_SOUL) { n ->
