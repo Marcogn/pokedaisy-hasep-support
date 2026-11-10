@@ -29,7 +29,7 @@ object WhatsNew {
                 Section(
                     NEW,
                     listOf(
-                        "Hasep: the Heart and Soul fork, every release, read through the table of addresses its ROM carries.",
+                        "Hasep: the Heart and Soul fork, every release, read through the table of addresses its ROM carries, with EXPAND, FLY, FLASH and the PC anywhere.",
                         "Updates: this app updates from the Hasep fork's releases, and says when PokeDaisy itself has a new version.",
                     ),
                 ),

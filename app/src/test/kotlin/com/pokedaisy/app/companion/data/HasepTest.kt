@@ -25,15 +25,33 @@ class HasepTest {
         val s = HasepSymbols.parse(rom)!!
 
         assertEquals(HasepSymbols.LAYOUT_VERSION, s.layoutVersion)
-        assertEquals(70, s.size)
+        assertEquals(82, s.size)
         assertEquals(0x020347DCL, s["gPlayerParty"])
         assertEquals(0x030041C0L, s["gSaveBlock1Ptr"])
-        assertEquals(0x0805E201L, s["HandleInputChooseAction"])   // Thumb bit kept, like the game's pointers
-        assertEquals(0x0805E200L, s.code("HandleInputChooseAction"))
+        assertEquals(0x0805E441L, s["HandleInputChooseAction"])   // Thumb bit kept, like the game's pointers
+        assertEquals(0x0805E440L, s.code("HandleInputChooseAction"))
         assertEquals(0x4021L, s["VAR_REPEL_STEP_COUNT"])
         // Every name hasepConfig / hasepFieldItems / hasepFlash asks for is there.
         hasepConfig(s, rom)
         hasepFlash(s, rom)
+    }
+
+    @Test
+    fun `EXPAND's row is Heart and Soul's with the table's addresses`() {
+        // The row checked headless (mgba_dump widerow + widecheck): the bedroom 59 of 60 frames exact, Cherrygrove
+        // 203 of 204, the first frame after a loaded state aside.
+        val row = hasepWideRow(HasepSymbols.parse(rom)!!)!!
+        assertEquals(
+            "3003054,2001d18,93097b8,30041c0,3000bd4,2001800,203a88c,203a406,203a408,203a3c4,3005bc0,3001fc9,852f8e0," +
+                "8526898,8523300,0,852349c,0,3014,10,3ff,280,c,0,0,ffff,0,1abc138c,4,1,224,0,0,0,0,0",
+            row.joinToString(",") { Integer.toHexString(it) },
+        )
+    }
+
+    @Test
+    fun `an older table without EXPAND's names gets no row`() {
+        val older = HasepSymbols(mapOf("gPlayerParty" to 0x020347DCL), HasepSymbols.LAYOUT_VERSION)
+        assertNull(hasepWideRow(older))
     }
 
     @Test
@@ -90,9 +108,9 @@ class HasepBattleTest {
         assertEquals(1, foe.type1)            // Normal
         assertEquals(3, foe.type2)            // Flying
         assertEquals(25, foe.hp)
-        // The player's controller is waiting in the action menu: the exported static, Thumb bit and all.
+        // The player's controller is waiting in the move menu: the exported function, Thumb bit and all.
         val fixture = FixtureMemoryReader.load("hasep_battle")
         val fn = fixture.readCoreMemory(s["gBattlerControllerFuncs"], 4).let { b -> (0..3).fold(0L) { v, i -> v or ((b[i].toLong() and 0xFF) shl (8 * i)) } }
-        assertEquals(s["HandleInputChooseAction"], fn)
+        assertEquals(s["HandleInputChooseMove"], fn)
     }
 }

@@ -48,6 +48,8 @@ object WideScreen {
             ) { RomArchive.open(rom) }
         }.getOrNull()
         if (hit != null) return "%08x".format(hit.retailCrc)
+        // Hasep: its row from the table its ROM carries (companion/data/Hasep.kt), on Heart and Soul's engine.
+        if (hasepRow(rom, v)) return crc
         retailEngineRow(rom, v)   // the ROM's own CRC either way: known by it now, or not at all
         return crc
     }
@@ -78,6 +80,24 @@ object WideScreen {
         }
         val ok = runCatching { MgbaCore.pkWideAddDerived(crc, proof.build.retailCrc, row) }.getOrDefault(false)
         android.util.Log.i("pokedaisy", "retail engine: %08x keeps ${proof.build.id}'s engine, EXPAND row ${if (ok) "set" else "refused"}".format(crc))
+        return ok
+    }
+
+    /** Hasep's EXPAND / field reads row, handed to pk_wide.c under the ROM's CRC. Whether that happened. Blocking, light. */
+    private fun hasepRow(rom: java.io.File, crc: Int): Boolean {
+        if (!rom.isFile) return false
+        val row = runCatching {
+            java.io.RandomAccessFile(rom, "r").use { raf ->
+                val table = com.pokedaisy.app.companion.data.HasepSymbols.parse { addr, len ->
+                    val off = addr - 0x08000000L
+                    if (off < 0 || off + len > raf.length()) throw IndexOutOfBoundsException()
+                    ByteArray(len).also { raf.seek(off); raf.readFully(it) }
+                }
+                table?.let { com.pokedaisy.app.companion.data.hasepWideRow(it) }
+            }
+        }.getOrNull() ?: return false
+        val ok = runCatching { MgbaCore.pkWideAddDerived(crc, com.pokedaisy.app.companion.data.HNS_WIDE_CRC, row) }.getOrDefault(false)
+        android.util.Log.i("pokedaisy", "Hasep: %08x on Heart and Soul's engine, EXPAND row ${if (ok) "set" else "refused"}".format(crc))
         return ok
     }
 

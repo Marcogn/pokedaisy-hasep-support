@@ -188,3 +188,32 @@ fun hasepFlash(s: HasepSymbols, read: (Long, Int) -> ByteArray): FlashFns {
     )
     return f.copy(codeCrcs = f.functions.map { crc(read, it) })
 }
+
+/** Heart and Soul 2.0.6's EXPAND row (pk_wide_games.h, CRC32 [HNS_WIDE_CRC]): Hasep's starts from it, as its engine. */
+const val HNS_WIDE_CRC = 0x01713508
+private val HNS_WIDE_ROW = intArrayOf(
+    0x0300306c, 0x02001d0c, 0x092df5a4, 0x030041d8, 0x03000bdc, 0x020017f4, 0x0203a764, 0x0203a2de, 0x0203a2e0, 0x0203a29c,
+    0x03005bd8, 0x03001fdd, 0x0850c6f4, 0x085036b0, 0x084fff58, 0x00000000, 0x08500360, 0x00000000, 0x00003014, 0x00000010,
+    0x000003ff, 0x00000280, 0x0000000c, 0x00000000, 0x00000000, 0x0000ffff, 0x00000000, 0x1abc138c, 0x00000004, 0x00000001,
+    0x00000224, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+)
+
+/** The symbol behind each of pk_wide.h's first address slots (VMAP .. ELEVATION_PRIO; SPRITE_PAL_TAGS stays 0, as in HnS). */
+private val WIDE_SYMBOLS = listOf(
+    "gBackupMapLayout", "gMapHeader", "gMapGroups", "gSaveBlock1Ptr", "sFieldCameraOffset", "gObjectEvents", "gSprites",
+    "gSpriteCoordOffsetX", "gSpriteCoordOffsetY", "sSpriteOrder", "gMain", "sLockFieldControls",
+    "gObjectEventGraphicsInfoPointers", "sObjectEventSpritePalettes", "gInitialMovementTypeFacingDirections", null,
+    "sElevationToPriority",
+)
+private const val WIDE_OBJ_GFX_COUNT = 30
+
+/** EXPAND's row for Hasep (pk_wide.c's PK_WIDE_* slots): HnS's, its addresses and object graphics count from the table.
+ * The constants (SaveBlock1's pos and offsets, the metatiles) are HnS's, and the ROM asserts the layouts behind them.
+ * Null for a build whose table lacks one of the names (older Hasep releases): no EXPAND rather than a wrong one. */
+fun hasepWideRow(s: HasepSymbols): IntArray? {
+    if (WIDE_SYMBOLS.any { it != null && !s.has(it) } || !s.has("NUM_OBJ_EVENT_GFX")) return null
+    val row = HNS_WIDE_ROW.copyOf()
+    WIDE_SYMBOLS.forEachIndexed { i, name -> if (name != null) row[i] = s[name].toInt() }
+    row[WIDE_OBJ_GFX_COUNT] = s["NUM_OBJ_EVENT_GFX"].toInt()
+    return row
+}
