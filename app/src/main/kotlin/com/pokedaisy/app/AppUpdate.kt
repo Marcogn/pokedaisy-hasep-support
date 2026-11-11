@@ -59,7 +59,7 @@ class AppUpdateFlow(private val activity: ComponentActivity) {
         Thread({
             val found = AppUpdater.check(BuildConfig.VERSION_NAME)
             // The Hasep fork: say once per version when PokeDaisy itself has moved on (a merge to ask for).
-            val upstream = if (found == null) AppUpdater.checkUpstream(BuildConfig.VERSION_NAME) else null
+            val upstream = if (found == null) AppUpdater.checkUpstream(BuildConfig.UPSTREAM_VERSION) else null
             // An APK we already offered is spent once it's installed (or abandoned) - but the one for the
             // release still on offer is kept, so UPDATE installs it at once instead of downloading it again.
             updatesDir.listFiles()?.forEach { if (pendingApk != it && (found == null || it.name != apkName(found))) it.delete() }
@@ -71,7 +71,7 @@ class AppUpdateFlow(private val activity: ComponentActivity) {
                 } else if (upstream != null && (manual || upstreamNoticeWanted(upstream.version))) {
                     Toast.makeText(
                         activity,
-                        "PokeDaisy ${upstream.version} è uscito (questa build è su ${AppUpdater.upstreamBase(BuildConfig.VERSION_NAME)}): chiedi il merge nel fork Hasep",
+                        "PokeDaisy ${upstream.version} è uscito (questa build è su ${BuildConfig.UPSTREAM_VERSION}): chiedi il merge nel fork Hasep",
                         Toast.LENGTH_LONG,
                     ).show()
                 } else if (manual) {

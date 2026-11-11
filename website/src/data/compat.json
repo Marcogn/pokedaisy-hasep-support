@@ -305,7 +305,7 @@
       {"game": "Gaia", "version": "3.2", "cells": ["yes", "yes", "part", "yes", "yes", "yes"]},
       {"game": "Odyssey", "version": "4.1.1", "cells": ["yes", "yes", "part", "yes", "yes", "yes"]},
       {"game": "Heart and Soul", "version": "2.0.6", "cells": ["yes", "yes", "yes", "yes", "yes", "yes"]},
-      {"game": "Hasep (Heart and Soul fork)", "version": "2.0.6.PLUS.10 and later", "cells": ["yes", "yes", "yes", "yes", "yes", "yes"]},
+      {"game": "Hasep (Heart and Soul fork)", "version": "2.0.6.PLUS.11 and later", "cells": ["yes", "yes", "yes", "yes", "yes", "yes"]},
       {"game": "Amethyst", "version": "1.3.0, 1.4.1", "cells": ["yes", "yes", "part", "yes", "yes", "yes"]},
       {"game": "Celia's Stupid Romhack", "version": "1.1.4", "cells": ["yes", "yes", "part", "yes", "yes", "yes"]},
       {"game": "Orange Islands", "version": "Beta 5.7, an older beta", "cells": ["yes", "yes", "part", "yes", "yes", "yes"]},

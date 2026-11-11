@@ -3108,12 +3108,14 @@ static bool avatarAt(uint32_t a) {
 
 /** gPlayerAvatar, found on the free field and kept for the game: right after gObjectEvents in every FireRed / Emerald
  * build and hack checked (+0x240: retail, CFRU, Gaia, Odyssey, Orange Islands, Ultra Violet, Celia, Glazed, Kaizo,
- * Mariomon, Imperium, Lazarus, Seaglass, Recharged Yellow), R.O.W.E.'s at +0x4A8 (its own ROM symbol table says so). 0
- * until found; Ruby / Sapphire (elsewhere), Heart and Soul, SoulGold, TMT2, Rogue and Quetzal never find it. */
+ * Mariomon, Imperium, Lazarus, Seaglass, Recharged Yellow), R.O.W.E.'s at +0x4A8 (its own ROM symbol table says so),
+ * Heart and Soul's and Hasep's 0x30 before it (Hasep's companion table, HnS 2.0.6's build: the same EWRAM). 0 until
+ * found; Ruby / Sapphire (elsewhere), SoulGold, TMT2, Rogue and Quetzal never find it. */
 static uint32_t playerAvatar(void) {
     if (F.avatar || !F.objects || F.family == PK_WIDE_FAMILY_RS || F.family == PK_WIDE_FAMILY_RS_JA) return F.avatar;
     if (avatarAt(F.objects + 0x240)) F.avatar = F.objects + 0x240;
     else if (avatarAt(F.objects + 0x4A8)) F.avatar = F.objects + 0x4A8;
+    else if (avatarAt(F.objects - 0x30)) F.avatar = F.objects - 0x30;
     return F.avatar;
 }
 

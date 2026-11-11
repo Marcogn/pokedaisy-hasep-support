@@ -55,7 +55,7 @@ The companion reads their party, bag, map, Pokédex and guide, with pictures, Po
 | Pokémon Gaia | 3.2 |
 | Pokémon Odyssey | 4.1.1 |
 | Pokémon Heart and Soul | 2.0.6 |
-| Hasep (a Heart and Soul fork) | 2.0.6.PLUS.10 and later: every release, read through the table its ROM carries |
+| Hasep (a Heart and Soul fork) | 2.0.6.PLUS.11 and later: every release, read through the table its ROM carries |
 | Pokémon Amethyst | 1.3.0 and 1.4.1 |
 | Celia's Stupid Romhack | 1.1.4 |
 | Pokémon Orange Islands | Beta 5.7, and an older beta |

@@ -117,8 +117,23 @@ fun hasepConfig(s: HasepSymbols, read: (Long, Int) -> ByteArray): NativeConfig {
             mapGroups = s["gMapGroups"],
         ),
         fieldItems = hasepFieldItems(s, read),
-    )
+    ).let { c ->
+        // From Hasep 2.0.6.PLUS.11 on (a table without these names reads as before): the battle's FOE TEAM and SHINY
+        // ODDS through gEnemyParty, and the shiny check the game draws (SHINY_ODDS, XOR the forced-shiny bit at +0x1F).
+        if (!s.has("gEnemyParty") || !s.has("SHINY_ODDS")) c else c.copy(
+            enemyParty = s["gEnemyParty"],
+            battlerPartyIndexes = s["gBattlerPartyIndexes"],
+            battleStructPtr = s["gBattleStruct"],
+            monToSwitchIntoOff = BATTLE_STRUCT_MON_TO_SWITCH_INTO,
+            shinyBelow = s["SHINY_ODDS"].toInt(),
+            partyMonLayout = c.partyMonLayout.copy(shinyModifier = BOX_MON_SHINY_MODIFIER),
+        )
+    }
 }
+
+/** gBattleStruct->monToSwitchIntoId and BoxPokemon's `hpLost:14, shinyModifier:1` high byte (the ROM asserts both). */
+private const val BATTLE_STRUCT_MON_TO_SWITCH_INTO = 0xE5
+private const val BOX_MON_SHINY_MODIFIER = 0x1F
 
 /** [FIELD_ITEMS_HEART_AND_SOUL] (Repels, PC anywhere, FLY) at Hasep's addresses; its CRCs from the ROM itself. */
 fun hasepFieldItems(s: HasepSymbols, read: (Long, Int) -> ByteArray): FieldItemFns {
@@ -162,6 +177,12 @@ fun hasepFieldItems(s: HasepSymbols, read: (Long, Int) -> ByteArray): FieldItemF
     return base.copy(
         varGet = fns[0], varSet = fns[1], checkBagHasItem = fns[2], removeBagItem = fns[3], fieldControlsLocked = fns[4],
         repelVar = s["VAR_REPEL_STEP_COUNT"].toInt(),
+        // The Repels from the bag, SoulGold's way (bagActions stays false): expansion's ids and Lure bit, the steps at
+        // gItemsInfo's holdEffectParam (+0x1D). Hasep keeps no VAR_LAST_REPEL_LURE_USED (the ROM asserts it).
+        repelItems = if (s.has("ITEM_REPEL")) setOf(s["ITEM_REPEL"], s["ITEM_SUPER_REPEL"], s["ITEM_MAX_REPEL"]).map { it.toInt() }.toSet()
+            else base.repelItems,
+        repelLureBit = if (s.has("REPEL_LURE_MASK")) s["REPEL_LURE_MASK"].toInt() else base.repelLureBit,
+        itemParamOffset = ITEM_HOLD_EFFECT_PARAM,
         items = s["gItemsInfo"],
         codeCrcs = fns.map { crc(read, it) },
         party = party,
@@ -169,6 +190,9 @@ fun hasepFieldItems(s: HasepSymbols, read: (Long, Int) -> ByteArray): FieldItemF
         fly = fly,
     )
 }
+
+/** gItemsInfo's holdEffectParam (the ROM asserts it). */
+private const val ITEM_HOLD_EFFECT_PARAM = 0x1D
 
 /** gPartyMenu.slotId (the ROM asserts it). */
 private const val PARTY_MENU_SLOT_ID = 9

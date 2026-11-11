@@ -838,7 +838,7 @@ class TelemetrySampler {
     val knownShinyTarget: ShinyOdds.Target?
         get() = (nativeCfg ?: unboundCfg.takeIf { kind == GameKind.UNBOUND })?.takeIf { it.shinyBelow > 0 && beMatch == null }
             ?.let { ShinyOdds.targetFor(it, fireRedFamily = fireRedEngine, plaintext = romSha1 in ShinyOdds.PLAINTEXT_SHA1S,
-                national = romSha1 in ShinyOdds.NATIONAL_SHA1S) }
+                national = romSha1 in ShinyOdds.NATIONAL_SHA1S || runningHasep != null) }
 
     /** The detected game's own USE / GIVE / TAKE tables when its config has them (Recharged Emerald), or null. */
     val knownFieldItems: FieldItemFns?
