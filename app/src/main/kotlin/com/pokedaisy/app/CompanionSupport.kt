@@ -54,6 +54,11 @@ object CompanionSupport {
         // A hack under a game code of its own (Ultra Violet's PUVV): only the build detect() knows.
         if (code in TelemetrySampler.HACK_GAME_CODES) return RomIdentity.sha1(rom) in TelemetrySampler.SUPPORTED_HACK_SHA1S
         if (code != "BPRE" && code != "BPEE") return false
+        // Hasep (docs/HASEP_FORK.md): no SHA-1 to know (every build is new), its own table of addresses instead -
+        // detect()'s test, read from the file (and before hashing 32 MB).
+        if (code == "BPEE" && size > 0x1000000L && com.pokedaisy.app.companion.data.HasepSymbols.parse { a, n ->
+                RomArchive.readAt(rom, a - 0x08000000L, n) ?: error("short ROM")
+            } != null) return true
         val sha1 = RomIdentity.sha1(rom)
         if (sha1 in TelemetrySampler.SUPPORTED_HACK_SHA1S) return true
         if (size > 0x1000000L) return false

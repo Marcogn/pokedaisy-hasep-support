@@ -40,6 +40,10 @@ object WhatsNew {
         // The Hasep fork (docs/HASEP_FORK.md): its own builds on top of PokeDaisy's, newest first.
         listOf(
             Notes(
+                "1.5.0.1.2",
+                listOf(Section(FIXES, listOf("Library: a Hasep ROM is no longer tagged NOT SUPPORTED."))),
+            ),
+            Notes(
                 "1.5.0.1.1",
                 listOf(
                     Section(
