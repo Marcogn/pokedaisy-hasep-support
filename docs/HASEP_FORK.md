@@ -34,6 +34,7 @@ field tools, with the addresses swapped. A ROM with a newer layout or format tha
 | `app/build.gradle.kts`, `strings.xml` | `applicationId` `com.pokedaisy.hasep`, version `<upstream>.<n>`, name "PokeDaisy Hasep" |
 | `companion/data/ActiveTables.kt` | the three item names Hasep appended (`itemNamesHasep`, ids 901 to 903) |
 | `companion/WhatsNew.kt` | the fork's own release notes, newest first |
+| `.github/workflows/release.yml` | a Run workflow button that tags `main` as `v<versionName>` (job `tag`) |
 | `NOTICE`, `README.md`, docs/manual, `docs/ROM_FEATURES.md`, `website/src/data/compat.json` | the modification notice, Hasep's rows |
 | `app/src/test/.../HasepTest.kt`, `fixtures/hasep/`, `fixtures/hasep_battle/` | the table, a new game and a trainer battle read through it |
 
@@ -70,9 +71,19 @@ make gamedata && make test-quick
 
 ## Releasing
 
-The upstream `release.yml` works unchanged: push a tag `v<versionName>` from `main`. It runs CI, builds the APK signed
-with the fork's key and puts up a **draft** release; publish it on GitHub and the app offers it as an update (drafts
-and pre-releases are skipped). The ROM-backed tests are skipped without a ROM runner. It needs, once, a `release`
-environment with the secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` and the variable
-`RELEASE_CERT_SHA256` (docs/RELEASING.md). The website workflow fails in the fork for lack of its deploy secrets: that's
-expected, the fork has no website.
+Bump `versionName` / `versionCode` on `main` first (Versions, above), then start the release one of two ways:
+
+- **On GitHub**: Actions -> Release -> Run workflow, with "Use workflow from" on `main`. That run (job `tag`) only
+  tags `main` as `v<versionName>` and starts the Release workflow again on the tag, as its own run in the list. It stops
+  if the tag already exists (the version wasn't bumped) or if it's run on another branch.
+- **With git**: `git tag v<versionName> origin/main && git push origin v<versionName>`.
+
+Either way the release itself is upstream's `release.yml`, unchanged: it checks the tag against `versionName`, runs CI,
+builds the APK signed with the fork's key and puts up a **draft** release. Publish it on GitHub (Releases -> the draft
+-> Publish release) and the app offers it as an update (drafts and pre-releases are skipped). The ROM-backed tests are
+skipped without a ROM runner, and the release says so. It needs, once, a `release` environment with the secrets
+`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` and the variable `RELEASE_CERT_SHA256`
+(docs/RELEASING.md). If that environment allows only `v*` tags, the button still works: the run that signs is the one on
+the tag. A tag ruleset that keeps tag creation to the owner (RELEASING.md suggests one) would refuse the button's tag
+unless GitHub Actions is on its bypass list. The website workflow fails in the fork for lack of its deploy secrets:
+that's expected, the fork has no website.

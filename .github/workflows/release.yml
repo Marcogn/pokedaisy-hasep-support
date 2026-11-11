@@ -6,11 +6,15 @@
 #   - the APK is signed with the release key (its certificate matches RELEASE_CERT_SHA256),
 #   - the APK holds the native code for both arm64 and 32-bit ARM (one APK for every device).
 # Setup (secrets, variables, the runner, branch protection): docs/RELEASING.md.
+# The Hasep fork adds a button (docs/HASEP_FORK.md's "Releasing"): Actions -> Release -> Run workflow on main
+# tags main as v<versionName> and starts this workflow again on that tag, which is then the usual release.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  # The fork's button. Run on main it only makes the tag (job `tag`); run on a tag it is a tag push's release.
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}
@@ -20,8 +24,40 @@ permissions:
   contents: read
 
 jobs:
+  # The fork: tag main as v<versionName>, then run this workflow on the tag. A tag pushed with GITHUB_TOKEN starts
+  # no workflow, but a workflow_dispatch does; and a run on the tag passes the `release` environment's v* rule,
+  # which a run on main would not.
+  tag:
+    name: Tag main as v<versionName>
+    if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push the tag
+      actions: write   # start the run on it
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Tag and start the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::run it on main (Use workflow from: main), not ${GITHUB_REF_NAME}"; exit 1
+          fi
+          version="$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)"
+          tag="v${version}"
+          [[ "${tag}" =~ ^v[0-9A-Za-z._-]+$ ]] || { echo "::error::odd versionName '${version}'"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null; then
+            echo "::error::${tag} already exists: bump versionName in app/build.gradle.kts first (docs/HASEP_FORK.md's Versions)"; exit 1
+          fi
+          git tag "${tag}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${tag}"
+          gh workflow run release.yml --repo "${GITHUB_REPOSITORY}" --ref "${tag}"
+          echo "Tagged ${GITHUB_SHA} as ${tag}; the release runs as its own **Release** run on ${tag}." >> "$GITHUB_STEP_SUMMARY"
+
   verify:
     name: Tag is on main and matches versionName
+    # Skipped (and with it the whole release) on the fork's button run on main: job `tag` above.
+    if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
