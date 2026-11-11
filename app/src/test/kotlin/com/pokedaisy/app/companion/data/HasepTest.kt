@@ -211,3 +211,30 @@ class HasepRepelTest {
         assertEquals(50, fns.repelSteps(50))
     }
 }
+
+/** The library's verdict (CompanionSupport, which the library tags read) takes Hasep by its table as detect() does: a
+ * player's Hasep ROM was tagged NOT SUPPORTED while it played with its companion. */
+class HasepLibraryTest {
+    @get:org.junit.Rule val tmp = org.junit.rules.TemporaryFolder()
+
+    private val head: ByteArray = javaClass.classLoader!!.getResourceAsStream("fixtures/hasep/rom_head.bin")!!.readBytes()
+
+    /** A 32 MB BPEE file (sparse) with [head] at its start: the fixture's head has no Nintendo header, so the game code
+     * is written in. */
+    private fun rom(head: ByteArray): java.io.File = tmp.newFile().also { f ->
+        java.io.RandomAccessFile(f, "rw").use { r ->
+            r.write(head.copyOf().also { "BPEE".toByteArray(Charsets.US_ASCII).copyInto(it, 0xAC) })
+            r.setLength(0x2000000L)
+        }
+    }
+
+    @Test
+    fun `a Hasep ROM is supported in the library`() {
+        assertEquals(true, com.pokedaisy.app.CompanionSupport.isSupported(rom(head)))
+    }
+
+    @Test
+    fun `the same size of BPEE hack without the table is not`() {
+        assertEquals(false, com.pokedaisy.app.CompanionSupport.isSupported(rom(ByteArray(head.size))))
+    }
+}
