@@ -23,7 +23,7 @@ field tools, with the addresses swapped. A ROM with a newer layout or format tha
 
 | Where | What |
 | --- | --- |
-| `companion/data/Hasep.kt` | the table's parser, the config (`hasepConfig`), field items / PC / FLY (`hasepFieldItems`), FLASH (`hasepFlash`) |
+| `companion/data/Hasep.kt` | the table's parser, the config (`hasepConfig`), field items / PC / FLY (`hasepFieldItems`), FREE FLIGHT / the scenic FLY / FLY ON (`hasepFlight`), FLASH (`hasepFlash`) |
 | `companion/data/Poller.kt` | `detect`: a large BPEE ROM with the table is Hasep, before the SHA-1 list; `runningHasep` cleared for any other ROM; `knownShinyTarget` reads Hasep's species as National Dex ids |
 | `companion/data/Flash.kt` | `flashCandidatesFor`: Hasep's FLASH |
 | `companion/data/MonArt.kt` | the follower art: gSpeciesInfo from the table |
@@ -36,10 +36,20 @@ field tools, with the addresses swapped. A ROM with a newer layout or format tha
 | `companion/WhatsNew.kt` | the fork's own release notes, newest first |
 | `.github/workflows/release.yml` | a Run workflow button that tags `main` as `v<versionName>` (job `tag`) |
 | `NOTICE`, `README.md`, docs/manual, `docs/ROM_FEATURES.md`, `website/src/data/compat.json` | the modification notice, Hasep's rows |
-| `app/src/test/.../HasepTest.kt`, `fixtures/hasep/`, `fixtures/hasep_battle/` | the table, a new game and a trainer battle read through it |
+| `app/src/test/.../HasepTest.kt`, `fixtures/hasep/`, `fixtures/hasep_battle/` | the table, a new game and a trainer battle read through it (run by `shared/`, so it can't use the app's classes) |
+| `app/src/test/.../app/HasepLibraryTest.kt` | the library takes a Hasep ROM as supported (`CompanionSupport`, an app class) |
+
+`companion/data` (so `Hasep.kt`) is also built by the `shared/` Kotlin Multiplatform module for iOS (PokeDaisy 1.6.0):
+no `java.*` there (`crc32` from Hashes.kt, `decodeToString`, `kotlin.concurrent.Volatile`); CI's "Shared code for iOS" checks.
 
 The code CRCs the field tools check (PC, FLY, FLASH, Repels) are computed from the running ROM itself: the table, not a
 known build, vouches for those functions.
+
+From Hasep 2.0.6.PLUS.12 the table also has what PokeDaisy 1.6.0's FREE FLIGHT needs (`hasepFlight`: Heart and Soul's
+`FLIGHT_HEART_AND_SOUL` with the table's addresses, the map groups' sizes from `MAP_GROUP_COUNT`, the heal locations' table, size
+and count; the movements, sounds and landing ground asserted in the ROM). An older table has no flight, and FLY stays the game's
+own warp: Heart and Soul's record can't be used as it is, its addresses are 2.0.6's. RIDE ON isn't there: it works through PLAYER
+LOOK, which Heart and Soul doesn't have.
 
 From Hasep 2.0.6.PLUS.11 the table also has gEnemyParty (FOE TEAM, SHINY ODDS at SHINY_ODDS with the forced-shiny
 bit), gPlayerAvatar (bike / surf) and the Repels' ids (the bag's Repels, SoulGold's way); a table without those names
@@ -56,7 +66,9 @@ PokeDaisy's version merged in is `BuildConfig.UPSTREAM_VERSION` (app/build.gradl
 compares with `lidor30/pokedaisy`'s releases. `versionCode` is PokeDaisy's times 100 plus the fork's part (PokeDaisy
 1.5.0.1 is 20, so 2001). Both only grow, since PokeDaisy's do. After merging PokeDaisy X, set `UPSTREAM_VERSION` to X,
 `versionName` to X.1 and `versionCode` to X's * 100 + 1; a later fork build on the same X bumps the last part.
-WHAT'S NEW: a fork build has notes of its own (`WhatsNew.isForkBuild`), above PokeDaisy's.
+WHAT'S NEW: a fork build has notes of its own (`WhatsNew.FORK`, which `isForkBuild` reads: 1.6.0.1 is the fork's first
+build on 1.6.0, not a PokeDaisy hotfix), above PokeDaisy's. The first build on a PokeDaisy release is that release's notes
+with the fork's line first (`onRelease`), so a player updating sees PokeDaisy's news too.
 
 ## Merging upstream
 

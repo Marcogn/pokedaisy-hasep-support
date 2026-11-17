@@ -189,8 +189,13 @@ private fun inMain(p: Long) = p in MAIN_RAM until MAIN_RAM_END
 private const val GEN5_MON_SIZE = 0xDC
 private val EMPTY_BATTLE_MON = BattleMon(0, 0, 0, 0, 0, 0, 0, IntArray(4), IntArray(4))
 
-/** Gen 5's type ids drop Gen 4's ??? (9): FIRE is 9 .. DARK 16. The app keeps Gen 3's ids. */
-fun gen5Type(t: Int): Int = if (t >= 9) t + 1 else t
+/** Gen 5's type ids drop Gen 4's ??? (9): FIRE is 9 .. DARK 16. The app keeps Gen 3's ids. 17 is no retail type: the
+ * Redux hacks' Fairy ([Black2Redux]), which takes "???"'s slot, 9, as Renegade Platinum's does. */
+fun gen5Type(t: Int): Int = when {
+    t == 17 -> 9
+    t >= 9 -> t + 1
+    else -> t
+}
 
 /** The save image in main RAM, or -1 before the game has loaded one (boot, the title screen). */
 fun gen5Image(r: (Long, Int) -> ByteArray, cfg: Gen5Config): Long {
@@ -230,7 +235,7 @@ const val GEN5_NATIONAL_DEX_FLAG = 0x30000
 /** The event flags and vars (the GUIDE's [SaveProgress]), with the badges as [GEN4_BADGE_FLAG] + n, the DS clock's
  * hour as [GEN4_VAR_HOUR], like the Gen 4 games', and [GEN5_NATIONAL_DEX_FLAG]. */
 fun readGen5Progress(
-    r: MemoryReader, cfg: Gen5Config, img: Long, national: Boolean = false, hour: Int = java.time.LocalTime.now().hour,
+    r: MemoryReader, cfg: Gen5Config, img: Long, national: Boolean = false, hour: Int = localNow().hour,
 ): SaveProgress? {
     val flagBytes = cfg.numFlags / 8
     val vars = r.readCoreMemory(img + cfg.varsFlagsOff, cfg.numVars * 2)
@@ -314,9 +319,13 @@ private fun readGen5Battle(r: MemoryReader, b: Gen5Battle): Gen5BattleRead? {
     fun member(client: Int, i: Int) = u32(parties, client * b.partyStride + i * 4).takeIf { inMain(it) }
     fun mon(addr: Long?) = addr?.let { decodeGen5BattleMon(r.readCoreMemory(it, 0x140), 0) } ?: EMPTY_BATTLE_MON
     val foeOut = member(1, 0)?.let { u8(r.readCoreMemory(it + GEN5_POKE_ID, 1), 0) % 6 } ?: -1
-    val doubles = rule == 1
-    val mons = listOf(mon(member(0, 0)), mon(member(1, 0)), if (doubles) mon(member(0, 1)) else EMPTY_BATTLE_MON,
-        if (doubles) mon(member(1, 1)) else EMPTY_BATTLE_MON)
+    // Anything but a single battle (1 double, 2 triple, 3 rotation): BATTLE BUTTONS' strip is a single battle's panel, so
+    // these float the game's own touch screen in (GitHub #833). The second battler shown is a double's or triple's next one;
+    // a rotation has one out at a time.
+    val doubles = rule != 0
+    val second = rule == 1 || rule == 2
+    val mons = listOf(mon(member(0, 0)), mon(member(1, 0)), if (second) mon(member(0, 1)) else EMPTY_BATTLE_MON,
+        if (second) mon(member(1, 1)) else EMPTY_BATTLE_MON)
     val foeParty = u32(head, b.offFoeParty)
     val foes = if (inMain(foeParty)) {
         val count = u32(r.readCoreMemory(foeParty + 4, 4), 0).toInt().coerceIn(0, PARTY_SIZE)
@@ -488,8 +497,19 @@ val GEN5_WHITE2 = GEN5_BLACK2.copy(
     townMapZones = townMapZonesWhite2,
 )
 
+/** Blaze Black 2 Redux and Volt White 2 Redux ([Black2Redux]): Black 2's and White 2's RAM, save and code, their own
+ * DEX pages from the cart. */
+val GEN5_BLACK2_REDUX = GEN5_BLACK2.copy(pokedexTables = POKEDEX_REDUX)
+val GEN5_WHITE2_REDUX = GEN5_WHITE2.copy(pokedexTables = POKEDEX_REDUX)
+
 /** The Gen 5 config for [kind], or null. */
-fun gen5ConfigFor(kind: GameKind?, code: String = romGameCode): Gen5Config? = when (kind) {
+fun gen5ConfigFor(kind: GameKind?, code: String = romGameCode): Gen5Config? = when {
+    black2Redux && kind == GameKind.BLACK2 -> GEN5_BLACK2_REDUX
+    black2Redux && kind == GameKind.WHITE2 -> GEN5_WHITE2_REDUX
+    else -> gen5ConfigForRetail(kind, code)
+}
+
+private fun gen5ConfigForRetail(kind: GameKind?, code: String): Gen5Config? = when (kind) {
     GameKind.BLACK -> if (code == "IRBF") GEN5_BLACK_FR else DsPorts.byCode(code)?.let(DsPorts::gen5Config) ?: GEN5_BLACK
     GameKind.WHITE -> if (code == "IRAF") GEN5_WHITE_FR else DsPorts.byCode(code)?.let(DsPorts::gen5Config) ?: GEN5_WHITE
     GameKind.BLACK2 -> DsPorts.byCode(code)?.let(DsPorts::gen5Config) ?: GEN5_BLACK2
@@ -502,12 +522,15 @@ fun gen5ConfigFor(kind: GameKind?, code: String = romGameCode): Gen5Config? = wh
  * (an emptied slot to the pocket's end, the rest in order) and the steps into [Gen5Config.repelStepsOff], which the
  * field counts down by itself. Only with the field free ([fieldFree]) and no Repel still working. Emu thread.
  */
-fun useGen5Repel(cfg: Gen5Config, calls: GameCalls, itemId: Int, steps: Int, fieldFree: Boolean): ItemUseOutcome {
+fun useGen5Repel(cfg: Gen5Config, calls: GameCalls, itemId: Int, steps: Int, fieldFree: Boolean, topUp: Boolean = false): ItemUseOutcome {
     if (!fieldFree) return ItemUseOutcome(ItemUseResult.NOT_NOW)
     val repelOff = cfg.repelStepsOff ?: return ItemUseOutcome(ItemUseResult.FAILED)
     val img = gen5Image({ a, n -> calls.read(a, n) }, cfg)
     if (img < 0) return ItemUseOutcome(ItemUseResult.FAILED)
-    if (u8(calls.read(img + repelOff, 1), 0) > 0) return ItemUseOutcome(ItemUseResult.STILL_ACTIVE)
+    // AUTO REFILL (topUp): added to the 1..REFILL_AT steps left, the byte capped at 255; otherwise only with none left.
+    val stepsLeft = u8(calls.read(img + repelOff, 1), 0)
+    if (topUp && stepsLeft !in 1..RepelRefill.REFILL_AT) return ItemUseOutcome(ItemUseResult.NOT_NOW)
+    if (!topUp && stepsLeft > 0) return ItemUseOutcome(ItemUseResult.STILL_ACTIVE)
     val pocket = img + cfg.bagOff   // the items pocket is the bag's first
     val size = cfg.pocketSizes[0]
     val raw = calls.read(pocket, size * 4)
@@ -519,10 +542,10 @@ fun useGen5Repel(cfg: Gen5Config, calls: GameCalls, itemId: Int, steps: Int, fie
         out[slot * 4 + 2] = left.toByte()
         out[slot * 4 + 3] = (left shr 8).toByte()
     } else {
-        System.arraycopy(raw, (slot + 1) * 4, out, slot * 4, (size - slot - 1) * 4)
+        raw.copyInto(out, slot * 4, (slot + 1) * 4, size * 4)
         for (i in (size - 1) * 4 until size * 4) out[i] = 0
     }
     if (!calls.write(pocket, out)) return ItemUseOutcome(ItemUseResult.FAILED)
-    if (!calls.write(img + repelOff, byteArrayOf(steps.toByte()))) return ItemUseOutcome(ItemUseResult.FAILED)
+    if (!calls.write(img + repelOff, byteArrayOf((if (topUp) minOf(255, stepsLeft + steps) else steps).toByte()))) return ItemUseOutcome(ItemUseResult.FAILED)
     return ItemUseOutcome(ItemUseResult.USED, steps = steps)
 }

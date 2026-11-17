@@ -39,6 +39,7 @@ class TelemetryStore {
         generation++
         sampler = TelemetrySampler()
         cached = null
+        com.pokedaisy.app.companion.data.romHeaderCode = ""
         _snapshot.value = SnapshotView(connected = false, error = tk("starting…"))
     }
 
@@ -58,6 +59,18 @@ class TelemetryStore {
         com.pokedaisy.app.companion.data.romLanguage = v.textLanguage
         cachedSamples = 0
         cached = v
+        _snapshot.value = v
+    }
+
+    /** [v] as it is, from a game the sampler doesn't read (a 3DS game: [com.pokedaisy.app.n3ds.N3dsSession] samples it
+     * itself). */
+    fun publish(v: SnapshotView) {
+        cached = null
+        // The per-game look reads activeGame; a GBA game's icon tables would draw this game's species wrong.
+        v.game?.let { game ->
+            if (game != activeGame) DecompIconSource.tables = com.pokedaisy.app.companion.data.IconTables()
+            activeGame = game
+        }
         _snapshot.value = v
     }
 
@@ -155,6 +168,8 @@ class TelemetryStore {
 
     /** The detected game's gPartyMenu + gPlayerParty, when its config has them. */
     fun knownPartyMenu(): Pair<Long, Long>? = sampler.knownPartyMenu
+    /** The detected game's layout for overworld party reordering, including verified English Unbound. */
+    fun knownPartyReorderConfig(): com.pokedaisy.app.companion.data.NativeConfig? = sampler.knownPartyReorderConfig
     fun knownPartyMenuStyle(): Pair<Long, Int>? = sampler.knownPartyMenuStyle
     fun retailEnginePartyMenu(): Pair<Long, Long>? = sampler.retailEnginePartyMenu
 
@@ -169,6 +184,7 @@ class TelemetryStore {
 
     /** The battle menus' cursors, where the ROM's RAM is known to be its config's. */
     fun knownCursorAddrs(): Pair<Long, Long>? = sampler.knownCursorAddrs
+    fun retailRom(): Boolean = sampler.retailRom
 
     private companion object {
         /** ~1 sample a second: a game whose data never comes in drops the copy after this long. */

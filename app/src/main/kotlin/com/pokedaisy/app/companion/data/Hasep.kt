@@ -1,6 +1,6 @@
 package com.pokedaisy.app.companion.data
 
-import java.util.zip.CRC32
+import kotlin.concurrent.Volatile
 
 /**
  * Hasep (Marcogn/pokehns-expansion-plus): a fork of Pokémon Heart and Soul that carries its own addresses. Every build
@@ -32,7 +32,7 @@ class HasepSymbols(private val values: Map<String, Long>, val layoutVersion: Int
          * build knows ([FORMAT_VERSION] / [LAYOUT_VERSION]: a newer Hasep needs a newer app). */
         fun parse(read: (addr: Long, len: Int) -> ByteArray): HasepSymbols? {
             val head = runCatching { read(ROM, SEARCH_BYTES) }.getOrNull() ?: return null
-            val magic = MAGIC.toByteArray(Charsets.US_ASCII)
+            val magic = MAGIC.encodeToByteArray()
             val at = (0..head.size - 20 step 4).firstOrNull { i -> magic.indices.all { head[i + it] == magic[it] } } ?: return null
             val format = u16(head, at + 8)
             val layout = u16(head, at + 10)
@@ -46,7 +46,7 @@ class HasepSymbols(private val values: Map<String, Long>, val layoutVersion: Int
             val values = LinkedHashMap<String, Long>()
             for (off in 0 until bytes.toInt() step entrySize) {
                 val nameLen = (0 until entrySize - 4).firstOrNull { table[off + it] == 0.toByte() } ?: (entrySize - 4)
-                val name = String(table, off, nameLen, Charsets.US_ASCII)
+                val name = table.decodeToString(off, off + nameLen)
                 values[name] = u32(table, off + entrySize - 4)
             }
             return HasepSymbols(values, layout).takeIf { layout == LAYOUT_VERSION }
@@ -67,7 +67,7 @@ val itemNamesHasep: Map<Int, String> by lazy {
 }
 
 /** CRC32 of the 32 bytes at [fn] (Thumb bit cleared), as the field tools check them. */
-private fun crc(read: (Long, Int) -> ByteArray, fn: Long): Long = CRC32().apply { update(read(fn and 1L.inv(), 32)) }.value
+private fun crc(read: (Long, Int) -> ByteArray, fn: Long): Long = crc32(read(fn and 1L.inv(), 32))
 
 /** gSpeciesInfo / gItemsInfo field offsets, Heart and Soul 2.0.6's (the ROM asserts them). */
 private const val SPECIES_ICON_SPRITE = 0x6C
@@ -188,6 +188,9 @@ fun hasepFieldItems(s: HasepSymbols, read: (Long, Int) -> ByteArray): FieldItemF
         party = party,
         pc = pc,
         fly = fly,
+        // FREE FLIGHT / the scenic FLY (PokeDaisy 1.6.0): Heart and Soul's record is at 2.0.6's fixed addresses, which
+        // Hasep moves, so only from a table that carries them (PLUS.12 on); none before, and FLY is the game's own warp.
+        flight = hasepFlight(s, read),
     )
 }
 
@@ -208,6 +211,77 @@ fun hasepFlash(s: HasepSymbols, read: (Long, Int) -> ByteArray): FlashFns {
         fieldCallbacks = listOf(s.code("FieldCallback_Flash"), s.code("SetUpPuzzleEffectRegisteel")),
         partyMenuSlotId = s["gPartyMenu"] + PARTY_MENU_SLOT_ID,
         mapHeader = s["gMapHeader"],
+        codeCrcs = emptyList(),
+    )
+    return f.copy(codeCrcs = f.functions.map { crc(read, it) })
+}
+
+/** The table's names FREE FLIGHT needs beyond FLY's (Hasep 2.0.6.PLUS.12 on); a table without one of them has no flight. */
+private val FLIGHT_SYMBOLS = listOf(
+    "gObjectEvents", "gPlayerAvatar", "gSprites", "gBackupMapLayout", "sMapConnectionFlags", "gSaveBlock1Ptr",
+    "gSaveBlock2Ptr", "gMain", "CB2_Overworld", "sLockFieldControls", "gPaletteFade", "LockPlayerFieldControls",
+    "UnlockPlayerFieldControls", "CreateSprite", "DestroySprite", "StartSpriteAnim", "SpriteCallbackDummy",
+    "gFieldEffectObjectTemplate_Bird", "LoadPlayerObjectEventPalette", "MapGridGetMetatileBehaviorAt",
+    "MapGridGetCollisionAt", "MapGridGetElevationAt", "GetObjectEventIdByPosition", "PlaySE", "gSpriteCoordOffsetX",
+    "gSpriteCoordOffsetY", "gMapHeader", "CurrentMapDrawMetatileAt", "DrawWholeMapView", "gMapGroups", "MAP_GROUP_COUNT",
+    "MAP_GROUPS_COUNT", "sHealLocations", "HEAL_LOCATION_SIZE", "HEAL_LOCATION_COUNT", "RemoveFollowingPokemon",
+    "UpdateFollowingPokemon", "gHasepAppScratch",
+)
+
+/**
+ * [FLIGHT_HEART_AND_SOUL] (FREE FLIGHT, the scenic FLY, FLY ON) at Hasep's addresses, or null on a table without them.
+ * The movements, sounds and landing ground stay Heart and Soul's: the ROM asserts them (src/hasep_symbols.c). Map groups
+ * past the first with no list (gMapGroups' NULLs, as in Heart and Soul) are left out.
+ */
+fun hasepFlight(s: HasepSymbols, read: (Long, Int) -> ByteArray): FlightFns? {
+    if (FLIGHT_SYMBOLS.any { !s.has(it) }) return null
+    val groups = s["MAP_GROUPS_COUNT"].toInt()
+    if (groups !in 1..255) return null
+    val counts = read(s["MAP_GROUP_COUNT"], groups)
+    val lists = read(s["gMapGroups"], 4 * groups)
+    val sizes = (0 until groups).map { g ->
+        val list = (0..3).fold(0L) { v, k -> v or ((lists[4 * g + k].toLong() and 0xFF) shl (8 * k)) }
+        list to (counts[g].toInt() and 0xFF)
+    }.takeWhile { (list, n) -> n > 0 && list in 0x08000000L until 0x0A000000L }.map { it.second }
+    if (sizes.isEmpty()) return null
+    val f = FLIGHT_HEART_AND_SOUL.copy(
+        objectEvents = s["gObjectEvents"],
+        playerAvatar = s["gPlayerAvatar"],
+        sprites = s["gSprites"],
+        vmap = s["gBackupMapLayout"],
+        connectionFlags = s["sMapConnectionFlags"],
+        saveBlock1Ptr = s["gSaveBlock1Ptr"],
+        saveBlock2Ptr = s["gSaveBlock2Ptr"],
+        main = s["gMain"],
+        cb2Overworld = s.code("CB2_Overworld"),
+        lockByte = s["sLockFieldControls"],
+        paletteFade = s["gPaletteFade"],
+        lockControls = s.code("LockPlayerFieldControls"),
+        unlockControls = s.code("UnlockPlayerFieldControls"),
+        createSprite = s.code("CreateSprite"),
+        destroySprite = s.code("DestroySprite"),
+        startSpriteAnim = s.code("StartSpriteAnim"),
+        spriteDummy = s["SpriteCallbackDummy"],   // written as a sprite's callback: the Thumb bit stays
+        birdTemplate = s["gFieldEffectObjectTemplate_Bird"],
+        birdPalette = s.code("LoadPlayerObjectEventPalette"),
+        behaviorAt = s.code("MapGridGetMetatileBehaviorAt"),
+        collisionAt = s.code("MapGridGetCollisionAt"),
+        elevationAt = s.code("MapGridGetElevationAt"),
+        objectAt = s.code("GetObjectEventIdByPosition"),
+        playSe = s.code("PlaySE"),
+        spriteOffset = s["gSpriteCoordOffsetX"],
+        spriteOffsetY = s["gSpriteCoordOffsetY"],
+        mapHeader = s["gMapHeader"],
+        drawMetatileAt = s.code("CurrentMapDrawMetatileAt"),
+        drawView = s.code("DrawWholeMapView"),
+        mapGroups = s["gMapGroups"],
+        mapGroupSizes = sizes,
+        healLocations = s["sHealLocations"],
+        healLocationSize = s["HEAL_LOCATION_SIZE"].toInt(),
+        healLocationCount = s["HEAL_LOCATION_COUNT"].toInt(),
+        followerRemove = s.code("RemoveFollowingPokemon"),
+        followerUpdate = s.code("UpdateFollowingPokemon"),
+        scratch = s["gHasepAppScratch"],
         codeCrcs = emptyList(),
     )
     return f.copy(codeCrcs = f.functions.map { crc(read, it) })

@@ -1,7 +1,6 @@
 package com.pokedaisy.app.companion.data
 
-import java.io.File
-import java.security.MessageDigest
+import okio.Path
 
 /**
  * A Game Boy Color (Gen 2) Pokémon game's own art, rebuilt from the player's ROM on its first launch
@@ -122,9 +121,9 @@ object Gen2Art {
         val iconPalNibbles: Pair<Int, Int>? = null,
     )
 
-    val CRYSTAL = Gen2ArtTables(
+    private fun crystalArt(sha1s: Set<String>, townMaps: List<Pair<Int, Int>>, townMapPalMap: Pair<Int, Int>) = Gen2ArtTables(
         name = "crystal",
-        sha1s = setOf(TelemetrySampler.CRYSTAL_SHA1, TelemetrySampler.CRYSTAL_REV1_SHA1, TelemetrySampler.CRYSTAL_AU_SHA1),
+        sha1s = sha1s,
         font = 0x3E to 0x4200,
         fontPath = CRYSTAL_FONT,
         icons = 0x23 to 0x6BBF,
@@ -135,13 +134,24 @@ object Gen2Art {
         iconsDir = CRYSTAL_ICONS,
         holdIconsPath = CRYSTAL_HOLD_ICONS,
         townMapGfx = 0x3E to 0x4BA0,
-        townMaps = listOf(0x24 to 0x5FFF, 0x24 to 0x6168),
-        townMapPalMap = 0x24 to 0x5F4B,
+        townMaps = townMaps,
+        townMapPalMap = townMapPalMap,
         pokegearPals = 0x02 to 0x7729,
         townMapPaths = CRYSTAL_TOWN_MAPS.map { "regionmap/$it.png" },
         playerSprites = listOf(0x30 to 0x4000, 0x31 to 0x7A40),
         objectPals = 0x02 to 0x7469,
         playerPaths = listOf("regionmap/$CRYSTAL_PLAYER.png", "regionmap/$CRYSTAL_PLAYER_F.png"),
+    )
+
+    val CRYSTAL = crystalArt(
+        setOf(TelemetrySampler.CRYSTAL_SHA1, TelemetrySampler.CRYSTAL_REV1_SHA1, TelemetrySampler.CRYSTAL_AU_SHA1),
+        townMaps = listOf(0x24 to 0x5FFF, 0x24 to 0x6168), townMapPalMap = 0x24 to 0x5F4B,
+    )
+
+    /** German Crystal (Kristall): English Crystal's art, its town maps 0x1F later. */
+    val CRYSTAL_DE = crystalArt(
+        setOf(TelemetrySampler.CRYSTAL_DE_SHA1),
+        townMaps = listOf(0x24 to 0x601E, 0x24 to 0x6187), townMapPalMap = 0x24 to 0x5F6A,
     )
 
     /** Crystal Legacy v1.3.1 (its pokecrystal.sym): its own font, party icons in eight palettes, redrawn POKéGEAR maps; Crystal's players. */
@@ -201,6 +211,23 @@ object Gen2Art {
         Gen2ArtTables(
             it.name, setOf(TelemetrySampler.SILVER_SHA1), it.font, it.fontPath, 0x23 to 0x6A56, 0x23 to 0x695B, it.eggIcon,
             0x23 to 0x68C1, it.partyMenuObPals, it.iconsDir, it.holdIconsPath, it.townMapGfx, it.townMaps, it.townMapPalMap,
+            it.pokegearPals, it.townMapPaths, it.playerSprites, it.objectPals, it.playerPaths,
+        )
+    }
+
+    /** German Gold / Silver: English's art, the party icons' tables 2 bytes later, the town maps 0x32 later. */
+    val GOLD_DE = GOLD.let {
+        Gen2ArtTables(
+            it.name, setOf(TelemetrySampler.GOLD_DE_SHA1), it.font, it.fontPath, 0x23 to 0x6A72, 0x23 to 0x6977, it.eggIcon,
+            0x23 to 0x68DD, it.partyMenuObPals, it.iconsDir, it.holdIconsPath, it.townMapGfx,
+            listOf(0x24 to 0x5F84, 0x24 to 0x60ED), 0x24 to 0x5EDE, it.pokegearPals, it.townMapPaths, it.playerSprites,
+            it.objectPals, it.playerPaths,
+        )
+    }
+    val SILVER_DE = GOLD_DE.let {
+        Gen2ArtTables(
+            it.name, setOf(TelemetrySampler.SILVER_DE_SHA1), it.font, it.fontPath, 0x23 to 0x6A58, 0x23 to 0x695D, it.eggIcon,
+            0x23 to 0x68C3, it.partyMenuObPals, it.iconsDir, it.holdIconsPath, it.townMapGfx, it.townMaps, it.townMapPalMap,
             it.pokegearPals, it.townMapPaths, it.playerSprites, it.objectPals, it.playerPaths,
         )
     }
@@ -325,7 +352,7 @@ object Gen2Art {
         )
     }
 
-    private val GAMES = listOf(CRYSTAL, GOLD, SILVER, CRYSTAL_CLEAR_V2_6_0, CRYSTAL_CLEAR_V2_5_11, PRISM, CRYSTAL_LEGACY) + POLISHED_CRYSTAL
+    private val GAMES = listOf(CRYSTAL, CRYSTAL_DE, GOLD, SILVER, GOLD_DE, SILVER_DE, CRYSTAL_CLEAR_V2_6_0, CRYSTAL_CLEAR_V2_5_11, PRISM, CRYSTAL_LEGACY) + POLISHED_CRYSTAL
 
     /** The game's text characters for its font tiles 0x80-0xFF (constants/charmap.asm) the companion prints. */
     private val CHARS: Map<Int, Char> = buildMap {
@@ -517,19 +544,15 @@ object Gen2Art {
      * build's (at this [VERSION]); returns the paths written. A family's builds (Crystal's releases, Crystal Clear's
      * versions and colour builds) share their paths, so starting another of them rebuilds them.
      */
-    fun extractTo(rom: ByteArray, dir: File): List<String> {
-        val sha1 = MessageDigest.getInstance("SHA-1").digest(rom).joinToString("") { "%02x".format(it) }
+    fun extractTo(rom: ByteArray, dir: Path): List<String> {
+        val sha1 = sha1(rom).hex()
         val t = GAMES.firstOrNull { sha1 in it.sha1s } ?: return emptyList()
-        val marker = File(dir, "gen2/${t.name}-built")
+        val marker = dir / "gen2/${t.name}-built"
         val stamp = "v$VERSION $sha1"
         if (marker.isFile && runCatching { marker.readText() }.getOrNull() == stamp) return emptyList()
         val wrote = ArrayList<String>()
         fun write(path: String, bytes: ByteArray) {
-            val out = File(dir, path)
-            out.parentFile?.mkdirs()
-            val tmp = File(out.path + ".tmp")
-            tmp.writeBytes(bytes)
-            tmp.renameTo(out)
+            (dir / path).writeAtomically(bytes)
             wrote += path
         }
         write(t.fontPath, font(rom, t))
@@ -537,19 +560,18 @@ object Gen2Art {
         write(t.holdIconsPath, holdIcons(rom, t).png())
         t.townMapPaths.forEachIndexed { i, path -> townMap(rom, t, i)?.let { write(path, it.png()) } }
         t.playerPaths.forEachIndexed { g, path -> write(path, player(rom, t, g).png()) }
-        marker.parentFile?.mkdirs()
         marker.writeText(stamp)
         return wrote
     }
 
     /** In the background, once per ROM file: a Game Boy Color cart is 2 MB. */
-    fun prefetch(filesDir: File, rom: File) {
-        Thread({
+    fun prefetch(filesDir: Path, rom: Path) {
+        background("pokedaisy-gen2-art") {
             runCatching {
-                val wrote = extractTo(rom.readBytes(), RomArt.dir(filesDir))
+                val wrote = extractTo(readRomFile(rom), RomArt.dir(filesDir))
                 if (wrote.isNotEmpty()) RomArt.announce()
-            }.onFailure { android.util.Log.w("pokedaisy", "Gen2Art: failed", it) }
-        }, "pokedaisy-gen2-art").apply { isDaemon = true; start() }
+            }.onFailure { Logs.w("Gen2Art: failed", it) }
+        }
     }
 
 }

@@ -2,9 +2,11 @@
 
 #include <3ds.h>
 #include <citro2d.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "../core/pd_ui.h"
+#include "host.h"
 
 #define GBA_W 240
 #define GBA_H 160
@@ -34,7 +36,8 @@ static C3D_Tex upTex;
 static C3D_RenderTarget* upTarget;
 static C3D_Tex bottomTex, topTex, overlayTex, perfTex;
 
-// A New 3DS draws on its third core, so writing the textures and waiting for the refresh come off the game's time.
+// A New 3DS draws on its fourth core, an Old 3DS on the system's (core 1, lent at 80%: host_core1_take), so writing the
+// textures and waiting for the refresh come off the game's time.
 // gpu_draw hands a job over: what the frame needs is copied into the stage (the game runs on and rewrites its buffers),
 // and the thread takes it at the next refresh. One job at a time: a game that's ahead waits for the stage, which is
 // what paces it. Without that core gpu_draw runs the job itself.
@@ -172,6 +175,13 @@ uint32_t* gpu_game_buffer(void) {
     return gameBuf;
 }
 
+// What shows beside the game's picture: black, or a Game Boy game's white.
+static u32 barColor;
+
+void gpu_set_bars(uint32_t rgb) {
+    barColor = C2D_Color32((u8) (rgb >> 16), (u8) (rgb >> 8), (u8) rgb, 0xFF);
+}
+
 void gpu_double_game(bool on) {
     gameDoubled = on && drawThread && gameBufs[1];
     shownBuf = gameBuf;
@@ -242,15 +252,25 @@ static void write_tiles(C3D_Tex* tex, const uint32_t* px, int w, int h, int stri
             int wide = w - x0 < across ? w - x0 : across;
             bool inHole = x0 >= hole->x && x0 + wide <= hole->x + hole->w, offHole = x0 + wide <= hole->x || x0 >= hole->x + hole->w;
             for (int j = 0; j < down; j++) {
+                // The row's source for this tile: the game's frame inside the hole, EXPAND's picture outside it; only a
+                // tile the hole's edge cuts picks pixel by pixel.
                 const uint32_t* row = rows[j];
                 const uint32_t* inGame = gameRows[j];
                 if (inGame && inHole) row = inGame;
                 if (!inGame || inHole || offHole) inGame = NULL;
-                if (inGame && offHole) inGame = NULL;
+                uint16_t* tt = t16 + tile;
+                const uint8_t* m = morton[j];
+                if (!inGame && wide == 8) {
+                    // A whole row of the tile: (2k, 2k + 1) sit side by side in Morton order, so two texels a store.
+                    const uint32_t* p = row + x0;
+                    for (int k = 0; k < 8; k += 2)
+                        *(uint32_t*) (tt + m[k]) = (uint32_t) to565(p[k]) | (uint32_t) to565(p[k + 1]) << 16;
+                    continue;
+                }
                 for (int i = 0; i < wide; i++) {
                     int x = x0 + i;
                     uint32_t p = inGame && x >= hole->x && x < hole->x + hole->w ? inGame[x] : row[x];
-                    t16[tile + morton[j][i]] = to565(p);
+                    tt[m[i]] = to565(p);
                 }
             }
         }
@@ -333,7 +353,10 @@ void gpu_hold_game(bool hold) {
     holdGame = hold;
 }
 
+// The dev build's split of the draw jobs (ticks): writing the game's texture, the canvases, waiting in FrameBegin, the rest.
+volatile u64 gpuTexTicks, gpuCanvasTicks, gpuBeginTicks, gpuRestTicks;
 static void run_job(const struct draw_job* j, bool threaded) {
+    u64 tA = svcGetSystemTick();
     bool game = j->game;
     int screenMode = j->screenMode, gameW = j->gameW, gameH = j->gameH, wideW = j->wideW, wideH = j->wideH;
     bool holdGame = j->holdGame;
@@ -351,12 +374,15 @@ static void run_job(const struct draw_job* j, bool threaded) {
     }
     bool canvases = j->bottom || j->top || j->overlay || j->perfNew;
     if (threaded && !canvases) LightEvent_Signal(&stageFree);
+    u64 tB = svcGetSystemTick();
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    u64 tC = svcGetSystemTick();
     if (j->bottom) write_canvas(&bottomTex, j->bottom, PD_UI_WIDTH, PD_UI_HEIGHT);
     if (j->top) write_canvas(&topTex, j->top, TOP_W, TOP_H);
     if (j->overlay) write_overlay(j->overlay);
     if (j->perfNew) write_perf(stagePerf);
     if (threaded && canvases) LightEvent_Signal(&stageFree);
+    u64 tD = svcGetSystemTick();
     Tex3DS_SubTexture sub, upSub;
     u32 black = C2D_Color32(0, 0, 0, 0xFF);
     // The smooth modes: the frame at 2x nearest, sampled linearly down to size (mGBA's "sharp bilinear").
@@ -367,7 +393,7 @@ static void run_job(const struct draw_job* j, bool threaded) {
         C2D_SceneBegin(upTarget);
         C2D_DrawImageAt(image(src, &sub, srcW, srcH), 0, 0, 0.5f, NULL, 2.0f, 2.0f);
     }
-    C2D_TargetClear(topTarget, black);
+    C2D_TargetClear(topTarget, game && barColor ? barColor : black);
     C2D_SceneBegin(topTarget);
     if (!game) {
         C2D_DrawImageAt(image(&topTex, &sub, TOP_W, TOP_H), 0, 0, 0.5f, NULL, 1.0f, 1.0f);
@@ -402,11 +428,19 @@ static void run_job(const struct draw_job* j, bool threaded) {
     C2D_DrawImageAt(image(&bottomTex, &bottomSub, PD_UI_WIDTH, PD_UI_HEIGHT), 0, 0, 0.5f, NULL, 1.0f, 1.0f);
     C3D_FrameEnd(0);
     framesShown++;
+    u64 tE = svcGetSystemTick();
+    gpuTexTicks += tB - tA;
+    gpuBeginTicks += tC - tB;
+    gpuCanvasTicks += tD - tC;
+    gpuRestTicks += tE - tD;
 }
 
 unsigned gpu_frames_shown(void) {
     return framesShown;
 }
+
+// The fourth core's work, in ticks (the dev build's stat).
+volatile u64 gpuWideTicks, gpuDrawTicks;
 
 static void draw_main(void* arg) {
     (void) arg;
@@ -415,7 +449,9 @@ static void draw_main(void* arg) {
         if (drawStop) return;
         // Its own copy: the stage goes free halfway through, and the next job can be written then.
         struct draw_job mine = job;
+        u64 t0 = svcGetSystemTick();
         run_job(&mine, true);
+        gpuDrawTicks += svcGetSystemTick() - t0;
         jobsDone++;
     }
 }
@@ -432,14 +468,17 @@ static void wide_main(void* arg) {
     for (;;) {
         LightEvent_Wait(&wideStart);
         if (wideStop) return;
+        u64 t0 = svcGetSystemTick();
         wideWork();
+        gpuWideTicks += svcGetSystemTick() - t0;
         LightEvent_Signal(&wideDone);
     }
 }
 
 bool gpu_wide_thread(void (*work)(void)) {
     if (wideThread) return true;
-    if (!drawThread) return false;
+    // The New 3DS's fourth core only: an Old 3DS has none to spare, and EXPAND's margins are drawn with the game there.
+    if (!drawThread || !host_is_new_3ds()) return false;
     wideWork = work;
     LightEvent_Init(&wideStart, RESET_ONESHOT);
     LightEvent_Init(&wideDone, RESET_STICKY);
@@ -459,10 +498,24 @@ void gpu_wide_join(void) {
     if (wideThread) LightEvent_Wait(&wideDone);
 }
 
+static int drawCore = -1;
+
+int gpu_draw_core(void) {
+    return drawThread ? drawCore : -1;
+}
+
 static void draw_thread_start(void) {
-    bool isNew = false;
-    APT_CheckNew3DS(&isNew);
-    if (!isNew) return;
+    bool isNew = host_is_new_3ds();
+    // An Old 3DS: the system's core, when it lends it (else everything stays on the game's core, as before).
+#ifdef PD_DEV
+    // The dev build's switch: sdmc:/pokedaisy-dev/draw0 keeps an Old 3DS's drawing on the game's core.
+    FILE* draw0 = isNew ? NULL : fopen("sdmc:/pokedaisy-dev/draw0", "rb");
+    if (draw0) {
+        fclose(draw0);
+        return;
+    }
+#endif
+    if (!isNew && !host_core1_take(HOST_CORE1_PERCENT)) return;
     stageGame = linearAlloc(GPU_GAME_STRIDE * GBA_H * sizeof(uint32_t));
     stageBottom = linearAlloc(PD_UI_WIDTH * PD_UI_HEIGHT * sizeof(uint32_t));
     stageTop = linearAlloc(TOP_W * TOP_H * sizeof(uint32_t));
@@ -474,9 +527,16 @@ static void draw_thread_start(void) {
     LightEvent_Signal(&stageFree);
     s32 priority = 0x30;
     svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
-    // The New 3DS's fourth core: mGBA's renderer has the third.
-    drawThread = threadCreate(draw_main, NULL, DRAW_STACK, priority - 1, 3, false);
-    if (!drawThread) drawThread = threadCreate(draw_main, NULL, DRAW_STACK, priority - 1, 2, false);
+    // The New 3DS's fourth core, beside armGBA's mixer (it sleeps between batches); mGBA's renderer and armGBA's render
+    // worker have the third. armGBA's second worker is kept off (pd_armgba.c): beside it this thread starved.
+    // An Old 3DS's system core: the job mostly waits for the refresh there, so the game no longer does.
+    static const int CORES_NEW[] = { 3, 2 }, CORES_OLD[] = { 1 };
+    const int* cores = isNew ? CORES_NEW : CORES_OLD;
+    int count = isNew ? 2 : 1;
+    for (int i = 0; i < count && !drawThread; i++) {
+        drawThread = threadCreate(draw_main, NULL, DRAW_STACK, priority - 1, cores[i], false);
+        drawCore = cores[i];
+    }
     if (drawThread) aptHook(&drawHook, draw_apt_hook, NULL);
 }
 

@@ -24,8 +24,8 @@ make release               # tags v1.2.0 on main and pushes the tag
 Then follow the **Release** run in the repo's Actions tab. Its last job waits for you:
 **Review deployments → release → Approve**. When it's green the release is on GitHub as a
 **draft**, with `PokeDaisy-1.2.0.apk` attached. Only you see it. Edit its notes, add any other
-platform's files (`gh release upload v1.2.0 <files>`: the Linux packages, the 3DS `.3dsx`; the
-APK stays the release's first `.apk`), then publish it: **Publish release** on its page, or
+platform's files (`gh release upload v1.2.0 <files>`: the Linux packages; the APK stays the
+release's first `.apk`), then publish it: **Publish release** on its page, or
 `gh release edit v1.2.0 --draft=false`. Publishing starts the **Website** workflow (a full
 release only), and the in-app updater offers the version on the next library open.
 
@@ -41,6 +41,47 @@ release only), and the in-app updater offers the version on the next library ope
   the symbols and puts the release up as a draft with the `gh` CLI from your Mac; publish it
   the same way. Its tag push starts the Release workflow too: cancel that run (`gh run cancel`)
   rather than approve it.
+
+## The 3DS files
+
+The Release run's last job (`3DS app and CIA`, `.github/workflows/3ds.yml`) builds the 3DS app from the tag and puts
+three files on the draft: `pokedaisy.3dsx` (the Homebrew Launcher), `pokedaisy.cia` (the HOME Menu, installed with FBI)
+and `pokedaisy-cia-qr.png`, the CIA's download link as a QR code for FBI's Remote Install > Scan QR Code, which it also
+adds to the notes (under `<!-- qr -->`; a second run replaces it). So put the notes on before it runs, or run it again
+after. On a local release (the Release run cancelled), run it by hand once the draft is up:
+
+```bash
+gh workflow run 3ds.yml --ref main -f tag=v1.2.0 -f upload_3dsx=true
+```
+
+`upload_3dsx=false` keeps a `.3dsx` already on the draft. Locally, `make -C 3ds cia` builds the CIA too (makerom and
+bannertool on the PATH).
+
+## The Linux files (beta)
+
+The **Linux foundation** workflow (`.github/workflows/linux.yml`) builds them; the Release workflow doesn't. It runs on
+pushes that touch Linux code, so start it on the tag yourself once the draft is up, then add its files to the draft:
+
+```bash
+V=1.2.0
+gh workflow run linux.yml --ref v$V        # the tagged commit; about 25 minutes
+gh run watch "$(gh run list --workflow linux.yml --branch v$V --limit 1 --json databaseId --jq '.[0].databaseId')"
+gh run download "$(gh run list --workflow linux.yml --branch v$V --limit 1 --json databaseId --jq '.[0].databaseId')" -D linux-v$V
+ls linux-v$V/*/*.zip                        # the six files below
+gh release upload v$V linux-v$V/*/*.zip
+```
+
+| File | For |
+| --- | --- |
+| `pokedaisy-linux-x86_64.zip` | Steam Deck and desktop Linux (glibc 2.35 or newer): the executable and its two cores |
+| `pokedaisy-linux-aarch64.zip` | TrimUI devices, as an app |
+| `pokedaisy-portmaster-aarch64.zip` | PortMaster handhelds (`PokeDaisy.sh` + `pokedaisy/`) |
+| `pokedaisy-libretro-x86_64.zip`, `pokedaisy-libretro-aarch64.zip` | the three libretro cores (GBA on armGBA, GB/GBC on mGBA, DS on DSperate) and their licenses, for other frontends |
+| `PokeDaisy-NXRedux.zip` | the TrimUI Brick on NXRedux (all three cores behind one collection) |
+
+The install guide for all six is the manual's Linux page (`docs/manual/linux.md`); link it in the release notes and
+say the Linux files are a **beta** (Android stays the full app). A file missing from the run means a job failed: fix
+it on `main`, then follow the "If a run fails" steps above.
 
 ## One APK for arm64 and 32-bit ARM
 
@@ -171,8 +212,9 @@ What it needs:
   and `nds/`, so point
   `POKEDAISY_ROM_DIR` at the `gba/` folder of that same layout.
   Any test whose ROM isn't there still skips rather than fails. Check which ones ran
-  with `make test-roms ROM_DIR=<folder>` and the report at
-  `app/build/reports/tests/testDebugUnitTest/index.html`.
+  with `make test-roms ROM_DIR=<folder>` and the reports at
+  `app/build/reports/tests/testDebugUnitTest/index.html` and `shared/build/reports/tests/testDebugUnitTest/index.html`
+  (most ROM-backed tests are the shared module's).
 
 Set it up once:
 

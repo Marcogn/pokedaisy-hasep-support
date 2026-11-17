@@ -34,6 +34,14 @@ fun moveKind(mv: MoveView): MoveKind? = when {
         renegadePlatinum && activeGame == GameKind.PLATINUM -> RenegadePlatinum.data?.moveCategories?.get(mv.id)?.let {
             when (it) { 0 -> MoveKind.PHYSICAL; 1 -> MoveKind.SPECIAL; 2 -> MoveKind.STATUS; else -> null }
         }
+        // So did the Redux hacks (Black 2 / White 2).
+        black2Redux && activeGame.isBw2 -> Black2Redux.data?.moveCategories?.get(mv.id)?.let {
+            when (it) { 0 -> MoveKind.PHYSICAL; 1 -> MoveKind.SPECIAL; 2 -> MoveKind.STATUS; else -> null }
+        }
+        // Heartfelt Gold (hg-engine): every move's own, from its cart.
+        heartfeltGold && activeGame == GameKind.HEARTGOLD -> HeartfeltGold.data?.moveCategories?.get(mv.id)?.let {
+            when (it) { 0 -> MoveKind.PHYSICAL; 1 -> MoveKind.SPECIAL; 2 -> MoveKind.STATUS; else -> null }
+        }
         originHeartGold || mv.id !in 1..559 -> null
         mv.id in dsStatusMoves -> MoveKind.STATUS
         mv.id in dsSpecialMoves -> MoveKind.SPECIAL
@@ -262,7 +270,8 @@ object MoveAdvisor {
         return moves.mapNotNull { id -> effectTier(mon, id) }
             .sortedByDescending { it.second }
             .sumOf { (g, t) ->
-                val n = seen.merge(g, 1, Int::plus)!!
+                val n = (seen[g] ?: 0) + 1
+                seen[g] = n
                 // One way to put a foe to sleep is plenty: a second of a kind counts for little.
                 (t * if (n == 1) 1f else 0.3f).toDouble()
             }.toFloat() * TIER_SHARE * ref

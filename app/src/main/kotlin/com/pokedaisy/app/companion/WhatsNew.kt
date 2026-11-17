@@ -37,29 +37,81 @@ object WhatsNew {
 
     /** Newest first. */
     val RELEASES: List<Notes> by lazy {
-        // The Hasep fork (docs/HASEP_FORK.md): its own builds on top of PokeDaisy's, newest first.
+        FORK + listOf(
+            NOTES_1_6_0,
+            FORK_1_5_0_1_2,
+            FORK_1_5_0_1_1,
+            hotfix("1.5.0.1", NOTES_1_5_0, "1.5.0.1 HOTFIX: turning a Samsung Galaxy sideways no longer closes the game."),
+        ) + OLDER
+    }
+
+    /**
+     * The Hasep fork (docs/HASEP_FORK.md): its builds on PokeDaisy's, newest first. The first on a PokeDaisy release is
+     * that release's notes with the fork's own line first under NEW ([onRelease]), so a player updating sees both.
+     */
+    private val FORK: List<Notes> by lazy {
         listOf(
-            Notes(
-                "1.5.0.1.2",
-                listOf(Section(FIXES, listOf("Library: a Hasep ROM is no longer tagged NOT SUPPORTED."))),
-            ),
-            Notes(
-                "1.5.0.1.1",
+            onRelease("1.6.0.1", NOTES_1_6_0, "Hasep: on PokeDaisy 1.6.0; FREE FLIGHT, the scenic FLY and FLY ON from Hasep 2.0.6.PLUS.12."),
+        )
+    }
+
+    private fun onRelease(version: String, of: Notes, line: String): Notes {
+        val new = of.sections.firstOrNull { it.title == NEW }
+        val sections = if (new == null) listOf(Section(NEW, listOf(line))) + of.sections
+        else of.sections.map { if (it === new) Section(NEW, listOf(line) + it.items) else it }
+        return Notes(version, sections)
+    }
+
+    private val FORK_1_5_0_1_2 = Notes(
+        "1.5.0.1.2",
+        listOf(Section(FIXES, listOf("Library: a Hasep ROM is no longer tagged NOT SUPPORTED."))),
+    )
+
+    private val FORK_1_5_0_1_1 = Notes(
+        "1.5.0.1.1",
+        listOf(
+            Section(
+                NEW,
                 listOf(
-                    Section(
-                        NEW,
-                        listOf(
-                            "Hasep: the Heart and Soul fork, from 2.0.6.PLUS.11, read through the table of addresses its ROM carries, with EXPAND, FLY, FLASH and the PC anywhere.",
-                            "Hasep: bike and surf speeds, the foe's whole team in a battle, SHINY ODDS and the Repels from the bag.",
-                            "Updates: this app updates from the Hasep fork's releases, and says when PokeDaisy itself has a new version.",
-                        ),
-                    ),
-                    Section(FIXES, listOf("PokeDaisy 1.5.0.1: turning a Samsung Galaxy sideways no longer closes the game.")),
+                    "Hasep: the Heart and Soul fork, from 2.0.6.PLUS.11, read through the table of addresses its ROM carries, with EXPAND, FLY, FLASH and the PC anywhere.",
+                    "Hasep: bike and surf speeds, the foe's whole team in a battle, SHINY ODDS and the Repels from the bag.",
+                    "Updates: this app updates from the Hasep fork's releases, and says when PokeDaisy itself has a new version.",
                 ),
             ),
-        ) + listOf(hotfix("1.5.0.1", NOTES_1_5_0, "1.5.0.1 HOTFIX: turning a Samsung Galaxy sideways no longer closes the game.")) +
-            OLDER
-    }
+            Section(FIXES, listOf("PokeDaisy 1.5.0.1: turning a Samsung Galaxy sideways no longer closes the game.")),
+        ),
+    )
+
+    private val NOTES_1_6_0 = Notes(
+        "1.6.0",
+        listOf(
+            Section(
+                NEW,
+                listOf(
+                    "FREE FLIGHT: take off from the MAP tab or the quick menu and fly over the map yourself.",
+                    "Scenic FLY: FLY takes you there through the sky. FLY STYLE brings back the classic way.",
+                    "FLY ON and RIDE ON: fly in a balloon, a helicopter, a zeppelin or a plane, and ride a motorcycle or a scooter instead of the bike.",
+                    "New games: Epsilon Emerald, Heartfelt Gold, Pokémon Brown, Blaze Black 2 and Volt White 2 Redux, Team Rocket Edition 2026 v3.1, Monomyth v1.2, and German Red, Blue, Crystal, Gold and Silver.",
+                    "GAME LOOK: the companion and the HUD in each game's own colours.",
+                    "GAMEPLAY: NO HMS NEEDED, EXP SHARE, LEVEL CAP, AUTO REFILL, SHINY ALERT and BOSS RETRY.",
+                    "POKéMON CENTER: heal your party, relearn or forget a move and rename a Pokémon from anywhere.",
+                    "SAVE EDITOR: a Pokémon's own page (nature, IVs, EVs, level, shiny), box tools and the Pokédex, now for DS saves too.",
+                    "PAL PARK and POKé TRANSFER: bring Pokémon from your GBA saves to the DS games. COLLECTION lists every save's Pokémon.",
+                    "HIDE BATTLE MENU: on two screens, pick from the companion and keep the game's battle menu off the top screen.",
+                    "MAP: caves and big buildings get their own map, floor by floor.",
+                    "DS CORE: a second DS emulator, faster on weaker devices. AUTO picks it for you.",
+                ),
+            ),
+            Section(
+                FIXES,
+                listOf(
+                    "Smoother play: a game that turns choppy gets smooth again by itself, and DS games skip a frame on devices that can't keep up.",
+                    "STEADY music: comes back after the screen sleeps, like the AYN Thor's lid closed and opened.",
+                    "DS battles on one screen: the companion's tab stays where you can tap it.",
+                ),
+            ),
+        ),
+    )
 
     private val NOTES_1_5_0 = Notes(
         "1.5.0",
@@ -180,7 +232,7 @@ object WhatsNew {
     fun due(current: String, lastSeen: String?, updated: Boolean): Notes? =
         if (updated && lastSeen != current && (isForkBuild(current) || lastSeen?.let(::releaseOf) != releaseOf(current))) notesFor(current) else null
 
-    /** A Hasep fork build (PokeDaisy's version plus one part, past the hotfix's four): every one has notes of its own,
-     * so it isn't a hotfix of the one before. */
-    private fun isForkBuild(version: String) = version.split('.').size > 4
+    /** A Hasep fork build (PokeDaisy's version plus one part, [FORK]): every one has notes of its own, so it isn't a
+     * hotfix of the one before (1.6.0.1 is the fork's first on 1.6.0, not PokeDaisy's hotfix). */
+    private fun isForkBuild(version: String) = FORK.any { it.version == version }
 }

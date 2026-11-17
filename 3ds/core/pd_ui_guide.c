@@ -17,8 +17,8 @@
 #include "pd_ui_internal.h"
 
 #define CHIP_H 22
-#define ROW 18
-#define LINE 16
+#define ROW pd_list_row(18)
+#define LINE pd_lh(16)
 #define MAX_ENTRIES 160
 #define MAX_SECTIONS 48
 #define MAX_PAGES 8
@@ -564,13 +564,14 @@ static void draw_list(struct pd_ui* ui, struct pd_canvas* c, int x, int y, int w
                 int top = cy < y ? y : cy;
                 int bottom = cy + eh > y + h ? y + h : cy + eh;
                 ui_add_scroll_hit(ui, x, top, w, bottom - top, HIT_GUIDE_ROW + i);
+                if (i < sec->first + sec->count - 1) ui_row_divider(c, x + 2, cy + eh - 1, w - 4);
             }
             cy += eh;
         }
         cy += 4;
     }
     pd_unclip(c);
-    ui_scroll_bar(c, x + w - 4, y, h, ui->guideScroll, total, PD_MUTED);
+    ui_list_rail(ui, c, x + w, y, h, ui->guideScroll, total);
 }
 
 static int draw_pages(struct pd_ui* ui, struct pd_canvas* c, const char* const* labels, int count) {

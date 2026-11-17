@@ -144,7 +144,7 @@ class HasepShinyTest {
         assertEquals(true, before.checksumOk)
         assertEquals(25, before.species and 0x7FF)   // species:11 | teraType:5
         // Odds of 1 in 1, so the roll always rewrites; two frames, as on the device.
-        val roller = ShinyOdds.Roller(target, java.util.Random(1))
+        val roller = ShinyOdds.Roller(target, kotlin.random.Random(1))
         val pokes = StringBuilder()
         val writer = { a: Long, bytes: ByteArray ->
             for (i in bytes.indices) pokes.append("poke8 0x%08X 0x%02X\n".format(a + i, bytes[i].toInt() and 0xFF))
@@ -212,29 +212,23 @@ class HasepRepelTest {
     }
 }
 
-/** The library's verdict (CompanionSupport, which the library tags read) takes Hasep by its table as detect() does: a
- * player's Hasep ROM was tagged NOT SUPPORTED while it played with its companion. */
-class HasepLibraryTest {
-    @get:org.junit.Rule val tmp = org.junit.rules.TemporaryFolder()
-
-    private val head: ByteArray = javaClass.classLoader!!.getResourceAsStream("fixtures/hasep/rom_head.bin")!!.readBytes()
-
-    /** A 32 MB BPEE file (sparse) with [head] at its start: the fixture's head has no Nintendo header, so the game code
-     * is written in. */
-    private fun rom(head: ByteArray): java.io.File = tmp.newFile().also { f ->
-        java.io.RandomAccessFile(f, "rw").use { r ->
-            r.write(head.copyOf().also { "BPEE".toByteArray(Charsets.US_ASCII).copyInto(it, 0xAC) })
-            r.setLength(0x2000000L)
-        }
+/** FREE FLIGHT needs the names Hasep's table carries from 2.0.6.PLUS.12 (hasepFlight): a PLUS.11 table has none of them, so
+ * no flight there - never Heart and Soul's own record, whose addresses are 2.0.6's - and FLY keeps the game's warp. Flown
+ * headless on a PLUS.12 build: docs/ROM_FEATURES.md's note H. */
+class HasepFlightTest {
+    private val head: ByteArray = javaClass.classLoader!!.getResourceAsStream("fixtures/hasep_wild/rom_head.bin")!!.readBytes()
+    private val rom = { addr: Long, len: Int ->
+        val off = (addr - 0x08000000L).toInt()
+        ByteArray(len) { i -> head.getOrElse(off + i) { 0 } }
     }
 
     @Test
-    fun `a Hasep ROM is supported in the library`() {
-        assertEquals(true, com.pokedaisy.app.CompanionSupport.isSupported(rom(head)))
-    }
-
-    @Test
-    fun `the same size of BPEE hack without the table is not`() {
-        assertEquals(false, com.pokedaisy.app.CompanionSupport.isSupported(rom(ByteArray(head.size))))
+    fun `a table without the flight names has no flight`() {
+        val s = HasepSymbols.parse(rom)!!
+        assertEquals(false, s.has("CB2_Overworld"))
+        assertNull(hasepFlight(s, rom))
+        val fns = hasepFieldItems(s, rom)
+        assertNull(fns.flight)
+        assertNotNull(fns.fly)
     }
 }

@@ -6,8 +6,22 @@ import android.app.Application
 class PokeDaisyApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // The data code reads the emulator through MgbaCore (companion/data/EmulatorCore.kt).
+        com.pokedaisy.app.companion.data.EmulatorCore.current = MgbaEmulatorCore
+        // The data code's log lines (companion/data/Logs.kt) go to Android's log.
+        com.pokedaisy.app.companion.data.Logs.sink = com.pokedaisy.app.companion.data.Logs.Sink { tag, warning, message, error ->
+            if (warning) android.util.Log.w(tag, message, error) else android.util.Log.i(tag, message)
+        }
         // The NEW tags' week starts with the first launch of a build that has the feature.
         com.pokedaisy.app.companion.NewFeatures.init(Prefs(this))
+        // SETTINGS' DESCRIPTIONS / GROUP TABS, kept across launches.
+        Prefs(this).let { p ->
+            com.pokedaisy.app.companion.ui.SettingsLook.descriptions = p.settingsDescriptions
+            com.pokedaisy.app.companion.ui.SettingsLook.tabs = p.settingsTabs
+            com.pokedaisy.app.companion.ui.SettingsLook.onChange = { d, t -> p.settingsDescriptions = d; p.settingsTabs = t }
+            com.pokedaisy.app.companion.ui.CompanionSkins.enabled = p.gameLook
+            com.pokedaisy.app.companion.ui.CompanionSkins.onChange = { p.gameLook = it }
+        }
         val prefs = Prefs(this)
         prefs.appOpenCount = (prefs.appOpenCount + 1).coerceAtMost(1000)
         CrashReports.apply(prefs.crashReportsEnabled)
@@ -19,8 +33,12 @@ class PokeDaisyApp : Application() {
         com.pokedaisy.app.companion.data.onGameIdentified = { kind, how -> CrashReports.gameIdentified(kind, how) }
         SaveBackups.settings = SaveBackups.Settings.from(prefs)
         ScreenScraperClient.enabled = FeatureFlags.screenScraper(this)
+        FeatureFlags.applyBlocked(this)
         // LIGHT COMPANION: the player's pick, and AUTO's verdict (a device that looks weak, or whose buttons came late before).
         com.pokedaisy.app.companion.LightCompanion.mode = com.pokedaisy.app.companion.LightCompanionMode.of(prefs.lightCompanion)
         com.pokedaisy.app.companion.LightCompanion.deviceWeak = prefs.lightCompanionMeasured || DevicePerformance.looksWeak(this)
+        // DS CORE's AUTO (companion.DsCore): DSperate on a weak device or a 32-bit Android.
+        com.pokedaisy.app.companion.DsCore.deviceWeak = DevicePerformance.looksWeak(this)
+        com.pokedaisy.app.companion.DsCore.is64Bit = android.os.Process.is64Bit()
     }
 }
