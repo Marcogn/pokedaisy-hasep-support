@@ -38,6 +38,9 @@ field tools, with the addresses swapped. A ROM with a newer layout or format tha
 | `NOTICE`, `README.md`, docs/manual, `docs/ROM_FEATURES.md`, `website/src/data/compat.json` | the modification notice, Hasep's rows |
 | `app/src/test/.../HasepTest.kt`, `fixtures/hasep/`, `fixtures/hasep_battle/` | the table, a new game and a trainer battle read through it |
 
+`companion/data` (so `Hasep.kt`) is also built by the `shared/` Kotlin Multiplatform module for iOS (PokeDaisy 1.6.0):
+no `java.*` there (`crc32` from Hashes.kt, `decodeToString`, `kotlin.concurrent.Volatile`); CI's "Shared code for iOS" checks.
+
 The code CRCs the field tools check (PC, FLY, FLASH, Repels) are computed from the running ROM itself: the table, not a
 known build, vouches for those functions.
 

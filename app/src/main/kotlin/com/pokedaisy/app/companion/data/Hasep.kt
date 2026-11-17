@@ -1,6 +1,6 @@
 package com.pokedaisy.app.companion.data
 
-import java.util.zip.CRC32
+import kotlin.concurrent.Volatile
 
 /**
  * Hasep (Marcogn/pokehns-expansion-plus): a fork of Pokémon Heart and Soul that carries its own addresses. Every build
@@ -32,7 +32,7 @@ class HasepSymbols(private val values: Map<String, Long>, val layoutVersion: Int
          * build knows ([FORMAT_VERSION] / [LAYOUT_VERSION]: a newer Hasep needs a newer app). */
         fun parse(read: (addr: Long, len: Int) -> ByteArray): HasepSymbols? {
             val head = runCatching { read(ROM, SEARCH_BYTES) }.getOrNull() ?: return null
-            val magic = MAGIC.toByteArray(Charsets.US_ASCII)
+            val magic = MAGIC.encodeToByteArray()
             val at = (0..head.size - 20 step 4).firstOrNull { i -> magic.indices.all { head[i + it] == magic[it] } } ?: return null
             val format = u16(head, at + 8)
             val layout = u16(head, at + 10)
@@ -46,7 +46,7 @@ class HasepSymbols(private val values: Map<String, Long>, val layoutVersion: Int
             val values = LinkedHashMap<String, Long>()
             for (off in 0 until bytes.toInt() step entrySize) {
                 val nameLen = (0 until entrySize - 4).firstOrNull { table[off + it] == 0.toByte() } ?: (entrySize - 4)
-                val name = String(table, off, nameLen, Charsets.US_ASCII)
+                val name = table.decodeToString(off, off + nameLen)
                 values[name] = u32(table, off + entrySize - 4)
             }
             return HasepSymbols(values, layout).takeIf { layout == LAYOUT_VERSION }
@@ -67,7 +67,7 @@ val itemNamesHasep: Map<Int, String> by lazy {
 }
 
 /** CRC32 of the 32 bytes at [fn] (Thumb bit cleared), as the field tools check them. */
-private fun crc(read: (Long, Int) -> ByteArray, fn: Long): Long = CRC32().apply { update(read(fn and 1L.inv(), 32)) }.value
+private fun crc(read: (Long, Int) -> ByteArray, fn: Long): Long = crc32(read(fn and 1L.inv(), 32))
 
 /** gSpeciesInfo / gItemsInfo field offsets, Heart and Soul 2.0.6's (the ROM asserts them). */
 private const val SPECIES_ICON_SPRITE = 0x6C
