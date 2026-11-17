@@ -41,6 +41,13 @@ extern uint32_t pd_backdrop_colors[3];
 // A colour of a game's own backdrop art under the same wash and scrim.
 uint32_t pd_backdrop_tint(uint32_t rgb);
 
+// The summary's Separator: a dark line beside a light one (OptionLook.separatorDark / Light).
+void pd_separator(struct pd_canvas* c, int x, int y, int len, bool vertical);
+// A battle-screen colour under dark mode's scrim (BattlePlaceholder's night()).
+uint32_t pd_battle_tint(uint32_t rgb);
+// The BATTLE tab's background (BattleBackdrop).
+void pd_battle_backdrop(struct pd_canvas* c);
+
 struct pd_game;
 struct pd_settings;
 // What the screens are drawn in: [g] may be NULL (the library).
@@ -78,13 +85,20 @@ extern uint32_t pd_gb_ink, pd_gb_paper;
 // The white title window and the grey list window; each returns its frame's width.
 int pd_title_box(struct pd_canvas* c, int x, int y, int w, int h, uint32_t fill);
 int pd_list_box(struct pd_canvas* c, int x, int y, int w, int h);
+// The battery in a title window: a green bolt while [charging], the level drawn (red at 15% and under), the percentage,
+// ending at [end] with text at [ty]. pd_battery_width is how wide that is.
+// TEXT SIZE SMALL's line between a list's rows (the bag's divider, on the grey lists): a pixel at [y]. Nothing at NORMAL.
+void pd_row_divider(struct pd_canvas* c, int x, int y, int w);
+void pd_battery_draw(struct pd_canvas* c, int end, int ty, int pct, bool charging);
+int pd_battery_width(int pct, bool charging);
 void pd_backdrop(struct pd_canvas* c);
 // A coloured icon: 1 canvas pixel a pixel at scale 1, half size at 0 (every other pixel).
 struct pd_art;
 void ui_art_at(struct pd_canvas* c, const struct pd_art* art, int x, int y, int scale);
-// Text centred in a row of height h at y (the cell is 16 px, caps at rows 4-12).
+// Text centred in a row of height h at y: the capitals (rows 4-12 of the 16 px cell) and their shadow's row under them,
+// 10 rows, in the middle. Centring the whole cell (+1) left every label two pixels low.
 static inline int pd_text_y(int y, int h) {
-    return y + (h - PD_FONT_HEIGHT) / 2 + 1;
+    return y + (h - 18) / 2;
 }
 
 #endif

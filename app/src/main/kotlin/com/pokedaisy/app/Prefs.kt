@@ -11,6 +11,7 @@ import com.pokedaisy.app.companion.FfMusicMode
 /** Tiny SharedPreferences wrapper for app-level state. */
 class Prefs(context: Context) {
     private val p = context.getSharedPreferences("pokedaisy", Context.MODE_PRIVATE)
+    private val appContext: Context = context.applicationContext ?: context
 
     var lastRomPath: String?
         get() = p.getString("last_rom", null)
@@ -70,6 +71,17 @@ class Prefs(context: Context) {
     var raToken: String?
         get() = p.getString("ra_token", null)
         set(v) = p.edit().putString("ra_token", v).apply()
+
+    /** Achievement popups (Settings > RetroAchievements): unlocks, game complete, leaderboards
+     * and the connection notices. Off also mutes the unlock fanfare. */
+    var raPopups: Boolean
+        get() = p.getBoolean("ra_popups", true)
+        set(v) = p.edit().putBoolean("ra_popups", v).apply()
+
+    /** PROGRESS popups only (the "38/50" notices); [raPopups] off hides these too. */
+    var raProgressPopups: Boolean
+        get() = p.getBoolean("ra_progress_popups", true)
+        set(v) = p.edit().putBoolean("ra_progress_popups", v).apply()
 
     /** Fast-forward speed cap. 0 = unlimited. */
     var ffMaxSpeed: Float
@@ -152,10 +164,84 @@ class Prefs(context: Context) {
         get() = p.getBoolean("trade_evolutions", false)
         set(v) = p.edit().putBoolean("trade_evolutions", v).apply()
 
+    /** FLY STYLE: the companion's FLY the game's way (CLASSIC) or flown over the field (SCENIC, the default: a game without
+     * FREE FLIGHT flies the classic way whatever this says), a [com.pokedaisy.app.companion.FlyStyle] id. */
+    var flyStyleId: Int
+        get() = p.getInt("fly_style", com.pokedaisy.app.companion.FlyStyle.SCENIC.id)
+        set(v) = p.edit().putInt("fly_style", v).putBoolean("fly_style_asked", true).apply()
+    val flyStyle: com.pokedaisy.app.companion.FlyStyle get() = com.pokedaisy.app.companion.FlyStyle.of(flyStyleId)
+
+    /** FLIGHT AREA: where FREE FLIGHT and the scenic FLY may go, a [com.pokedaisy.app.companion.FlightAreaMode] id (0 = only
+     * the maps the player has seen, the default). For every game. */
+    var flightAreaId: Int
+        get() = p.getInt("flight_area", com.pokedaisy.app.companion.FlightAreaMode.SEEN.id)
+        set(v) = p.edit().putInt("flight_area", v).apply()
+    val flightArea: com.pokedaisy.app.companion.FlightAreaMode get() = com.pokedaisy.app.companion.FlightAreaMode.of(flightAreaId)
+
+    /** MAKEOVER > FLY ON: what FREE FLIGHT and the scenic FLY fly on, a [com.pokedaisy.app.companion.data.FlightVehicle] id
+     * (0 the game's own bird). For every game. */
+    var flightVehicleId: Int
+        get() = p.getInt("flight_vehicle", 0)
+        set(v) = p.edit().putInt("flight_vehicle", v).apply()
+
+    /** MAKEOVER > RIDE ON: what the player rides when they get on their bike, a
+     * [com.pokedaisy.app.companion.data.RideVehicle] id (0 the game's own bike). For every game. */
+    var rideVehicleId: Int
+        get() = p.getInt("ride_vehicle", 0)
+        set(v) = p.edit().putInt("ride_vehicle", v).apply()
+
+    /** The first scenic FLY's landing asked KEEP IT / USE CLASSIC (FlyStyleAsk), or the player picked a FLY STYLE themselves:
+     * never asked again. */
+    var flyStyleAsked: Boolean
+        get() = p.getBoolean("fly_style_asked", false)
+        set(v) = p.edit().putBoolean("fly_style_asked", v).apply()
+
     /** REUSABLE TMS: a TM stays in the bag after it teaches a move, as an HM does (ReusableTms.kt). */
     var reusableTms: Boolean
         get() = p.getBoolean("reusable_tms", false)
         set(v) = p.edit().putBoolean("reusable_tms", v).apply()
+
+    /** EXP SHARE: OFF / SPLIT / FULL, by [com.pokedaisy.app.companion.data.ExpShare.Mode.id]. */
+    var expShare: Int
+        get() = p.getInt("exp_share", 0)
+        set(v) = p.edit().putInt("exp_share", v).apply()
+
+    /** GAME LOOK (DISPLAY OPTIONS on both screens, CompanionSkins.enabled): the companion and the HUD in the running game's
+     * own look. On by default. */
+    var gameLook: Boolean
+        get() = p.getBoolean("game_look", true)
+        set(v) = p.edit().putBoolean("game_look", v).apply()
+
+    /** SETTINGS' DESCRIPTIONS and GROUP TABS (both screens, SettingsLook): shown by default. */
+    var settingsDescriptions: Boolean
+        get() = p.getBoolean("settings_descriptions", true)
+        set(v) = p.edit().putBoolean("settings_descriptions", v).apply()
+    var settingsTabs: Boolean
+        get() = p.getBoolean("settings_tabs", true)
+        set(v) = p.edit().putBoolean("settings_tabs", v).apply()
+
+    /** LOW HP BEEP / FIELD POISON: the game's own (ON) or turned off by a patch (QuietPatches.kt). */
+    var lowHpBeep: Boolean
+        get() = p.getBoolean("low_hp_beep", true)
+        set(v) = p.edit().putBoolean("low_hp_beep", v).apply()
+    var fieldPoison: Boolean
+        get() = p.getBoolean("field_poison", true)
+        set(v) = p.edit().putBoolean("field_poison", v).apply()
+
+    /** AUTO REFILL: another REPEL of the kind working goes on before it runs out (RepelRefill.kt). */
+    var repelRefill: Boolean
+        get() = p.getBoolean("repel_refill", false)
+        set(v) = p.edit().putBoolean("repel_refill", v).apply()
+
+    /** LEVEL CAP: no Pokémon goes past the next boss's top level (LevelCap.kt). */
+    var levelCap: Boolean
+        get() = p.getBoolean("level_cap", false)
+        set(v) = p.edit().putBoolean("level_cap", v).apply()
+
+    /** NO HMS NEEDED: the field moves work without a Pokémon that knows them, once the badge is in (HmFree.kt). */
+    var hmFree: Boolean
+        get() = p.getBoolean("hm_free", false)
+        set(v) = p.edit().putBoolean("hm_free", v).apply()
 
     /** INSTANT TEXT: a text box's words appear at once (InstantText.kt). */
     var instantText: Boolean
@@ -194,10 +280,34 @@ class Prefs(context: Context) {
         set(v) = p.edit().putBoolean("rival_look", v).apply()
 
     /** Remembered speed-cycle index per ROM (keyed by CRC32). */
+    /** BOSS RETRY: a state as each trainer battle starts, offered back after a loss (BattleRetryAsk). */
+    var battleRetry: Boolean
+        get() = p.getBoolean("battle_retry", false)
+        set(v) = p.edit().putBoolean("battle_retry", v).apply()
+
+    /** SHINY ALERT: on, and its hunt's count of wild battles per ROM (since the last shiny, or since it was turned on). */
+    var shinyAlert: Boolean
+        get() = p.getBoolean("shiny_alert", false)
+        set(v) = p.edit().putBoolean("shiny_alert", v).apply()
+    fun shinyHuntFor(romKey: String): Int = p.getInt("shiny_hunt_$romKey", 0)
+    fun setShinyHuntFor(romKey: String, count: Int) = p.edit().putInt("shiny_hunt_$romKey", count).apply()
+
+    /** LAST BALL: the BATTLE tab's ball button (BattleBall.kt), and the ball last thrown per ROM (0 = none yet). */
+    var lastBallButton: Boolean
+        get() = p.getBoolean("last_ball_button", true)
+        set(v) = p.edit().putBoolean("last_ball_button", v).apply()
+    fun lastBallFor(romKey: String): Int? = p.getInt("last_ball_$romKey", 0).takeIf { it != 0 }
+    fun setLastBallFor(romKey: String, itemId: Int) = p.edit().putInt("last_ball_$romKey", itemId).apply()
+
     fun speedIndexFor(romKey: String): Int = p.getInt("speed_$romKey", 0)
     fun setSpeedIndexFor(romKey: String, index: Int) = p.edit().putInt("speed_$romKey", index).apply()
 
     /** The ZOOM step the player last picked on this ROM (WideCamera.level: 0 = 1x), put back when it's played again. */
+    /** SETTINGS > FONT: the app's text font by AppFont ordinal (0 PIXEL, the default; companion/ui/theme/AppFont.kt). */
+    var appFont: Int
+        get() = p.getInt("app_font", 0)
+        set(v) = p.edit().putInt("app_font", v).apply()
+
     fun zoomLevelFor(romKey: String): Int = p.getInt("zoom_$romKey", 0)
     fun setZoomLevelFor(romKey: String, level: Int) = p.edit().putInt("zoom_$romKey", level).apply()
 
@@ -297,6 +407,17 @@ class Prefs(context: Context) {
     var battleInfoFirst: Boolean
         get() = p.getBoolean("battle_info_first", false)
         set(v) = p.edit().putBoolean("battle_info_first", v).apply()
+
+    /** BATTLE VIEW > SUGGESTIONS: the BATTLE tab opens on SUGGESTIONS (GitHub discussions #614 / #640); wins over
+     *  [battleInfoFirst]. Off by default. */
+    var battleSuggestionsFirst: Boolean
+        get() = p.getBoolean("battle_suggestions_first", false)
+        set(v) = p.edit().putBoolean("battle_suggestions_first", v).apply()
+
+    /** CHALLENGE ICONS: RetroAchievements' challenge badges and leaderboard values in the companion's corner. On by default. */
+    var raIcons: Boolean
+        get() = p.getBoolean("ra_icons", true)
+        set(v) = p.edit().putBoolean("ra_icons", v).apply()
 
     /** GAME NAMES: the library names games by their file (GitHub #124); a RENAME still wins. Off by default. */
     var libraryFileNames: Boolean
@@ -452,6 +573,12 @@ class Prefs(context: Context) {
             ).apply()
     }
 
+    /** HIDE BATTLE MENU: two screens, the game's own FIGHT / BAG and move menus left off the game's screen (the
+     * companion's battle buttons pick), an arrow pointing at the companion instead (pk_wide.c's menuHideBegin). */
+    var hideBattleMenu: Boolean
+        get() = p.getBoolean("hide_battle_menu", true)
+        set(v) = p.edit().putBoolean("hide_battle_menu", v).apply()
+
     /** BATTLE BUTTONS (companion.ui.BattleButtons): one screen, FIGHT, POKéMON and RUN beside a battle. */
     var battleButtons: Boolean
         get() = p.getBoolean("battle_buttons", true)
@@ -526,10 +653,17 @@ class Prefs(context: Context) {
 
     /** SCREEN > DS RESOLUTION: a DS game's 3D at this many times the DS's own (2-8: the GPU renderer,
      * nds/pk_nds_gl.h) or the DS's own on the CPU (1, the default: melonDS's software renderer, pixel for pixel). */
-    /** DS CPU BOOST: the emulated ARM9 at twice the DS's clock (MgbaCore.pkNdsCpuBoost), on unless turned off. */
+    /** DS CPU BOOST: the emulated ARM9 at twice the DS's clock (MgbaCore.pkNdsCpuBoost). Until the player sets it, on
+     * except where [DevicePerformance.looksWeak]: the boost about doubles the ARM9's work (HeartGold's frame 3.8 -> 7.3 ms
+     * on the RP6), and a chip with only little cores (the RG DS's A55s) runs out of time with it, not without. */
     var dsCpuBoost: Boolean
-        get() = p.getBoolean("ds_cpu_boost", true)
+        get() = if (p.contains("ds_cpu_boost")) p.getBoolean("ds_cpu_boost", true) else !DevicePerformance.looksWeak(appContext)
         set(v) = p.edit().putBoolean("ds_cpu_boost", v).apply()
+
+    /** SCREEN > DS CORE: which emulator runs a DS game (companion.DsCore: AUTO, the default, MELONDS, DSPERATE). */
+    var dsCore: com.pokedaisy.app.companion.DsCore
+        get() = com.pokedaisy.app.companion.DsCore.of(p.getInt("ds_core", 0))
+        set(v) = p.edit().putInt("ds_core", v.id).apply()
 
     var dsResolution: Int
         get() = p.getInt("ds_resolution", 1).coerceIn(1, DS_RESOLUTION_MAX)
@@ -621,6 +755,12 @@ class Prefs(context: Context) {
         get() = p.getBoolean("ds_bottom_companion", false)
         set(v) = p.edit().putBoolean("ds_bottom_companion", v).apply()
 
+    /** DS TOUCH SCREEN: a DS game's touch screen on the second display at its own 4:3 with the COMPANION bar under it
+     *  (ORIGINAL, false), or stretched over the whole display with a tab for the switch (STRETCH, true). */
+    var dsTouchFill: Boolean
+        get() = p.getBoolean("ds_touch_fill", false)
+        set(v) = p.edit().putBoolean("ds_touch_fill", v).apply()
+
     /** Single-screen devices: the companion's side panel is locked beside the game (see [SidePanel]). */
     var sidePanelDocked: Boolean
         get() = p.getBoolean("side_panel_docked", false)
@@ -637,8 +777,9 @@ class Prefs(context: Context) {
         get() = p.getBoolean("companion_window", true)
         set(v) = p.edit().putBoolean("companion_window", v).apply()
 
-    /** One screen held sideways: the white tab at the bottom of the screen's right edge that opens the companion (SETTINGS >
-     * COMPANION BUTTON). Off, BACK and the HUD's COMPANION button still open it. */
+    /** One screen held sideways: the buttons on the game screen that open the companion - the white tab at the bottom of the
+     * screen's right edge and the HUD's COMPANION (SETTINGS > COMPANION BUTTON). Off, BACK, the COMPANION hotkey and the QUICK
+     * MENU still open it. */
     var companionTab: Boolean
         get() = p.getBoolean("companion_tab", true)
         set(v) = p.edit().putBoolean("companion_tab", v).apply()

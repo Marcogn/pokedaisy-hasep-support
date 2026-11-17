@@ -56,7 +56,9 @@ PokeDaisy's version merged in is `BuildConfig.UPSTREAM_VERSION` (app/build.gradl
 compares with `lidor30/pokedaisy`'s releases. `versionCode` is PokeDaisy's times 100 plus the fork's part (PokeDaisy
 1.5.0.1 is 20, so 2001). Both only grow, since PokeDaisy's do. After merging PokeDaisy X, set `UPSTREAM_VERSION` to X,
 `versionName` to X.1 and `versionCode` to X's * 100 + 1; a later fork build on the same X bumps the last part.
-WHAT'S NEW: a fork build has notes of its own (`WhatsNew.isForkBuild`), above PokeDaisy's.
+WHAT'S NEW: a fork build has notes of its own (`WhatsNew.FORK`, which `isForkBuild` reads: 1.6.0.1 is the fork's first
+build on 1.6.0, not a PokeDaisy hotfix), above PokeDaisy's. The first build on a PokeDaisy release is that release's notes
+with the fork's line first (`onRelease`), so a player updating sees PokeDaisy's news too.
 
 ## Merging upstream
 

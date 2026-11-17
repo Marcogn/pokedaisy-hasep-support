@@ -4,6 +4,8 @@
 #include "../core/pd_tables.h"
 #include "../../linux/gb_field.h"
 #include "pd_mixer.h"
+#include "../emu/pd_armgba.h"
+#include "../emu/pd_gpsp.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,10 +25,14 @@
 #include "../../app/src/main/cpp/pk_host.h"
 #include "../../app/src/main/cpp/pk_wide.h"
 #include "../../linux/field_items.h"
+#include "../../linux/flash.h"
+#include "../../linux/tm_teach.h"
 #include "../../linux/wild.h"
 #include "../core/pd_canvas.h"
+#include "../core/pd_font.h"
 #include "../core/pd_map.h"
 #include "../core/pd_romart.h"
+#include "../core/pd_dex.h"
 #include "../core/pd_style.h"
 
 // What a save state keeps: the RTC, never the save data - loading one must not write an old copy over the save file
@@ -43,6 +49,13 @@ static uint32_t wideSource[PK_WIDE_W * PK_WIDE_H];
 static uint32_t wideFrames[2][PD_TOP_W * PD_TOP_H];
 static int wideShown;
 static uint32_t overlayPx[PD_TOP_W * PD_TOP_H];
+
+// The bag's USE: the field items' own, and a TM / HM where the game's TM screen can be opened (the host callback has no
+// context, so the running game's TM config is kept here).
+static const struct pd_config* itemTmCfg;
+static bool item_can_use(int item) {
+    return pd_items_can_use(item) || (itemTmCfg && tm_teaches(itemTmCfg, item));
+}
 
 // A Game Boy game's bus; 0x1Dxxx is D000-DFFF in that WRAM bank whatever the game has switched in there (pk_gb_read_banked).
 static bool gb_read(const struct pd_session* s, uint32_t addr, uint8_t* out, size_t len) {
@@ -89,6 +102,9 @@ bool pd_session_write(void* ctx, uint32_t addr, const void* data, size_t len) {
         for (size_t i = 0; i < len; i++) s->core->busWrite8(s->core, addr + (uint32_t) i, ((const uint8_t*) data)[i]);
         return true;
     }
+    // armGBA and gpSP throw out code they compiled from RAM that changes.
+    if (pd_armgba_is(s->core)) return pd_armgba_write(addr, data, len);
+    if (pd_gpsp_is(s->core)) return pd_gpsp_write(addr, data, len);
     if (addr >= 0x02000000 && addr - 0x02000000 + len <= s->ewramSize) {
         memcpy(s->ewram + (addr - 0x02000000), data, len);
         return true;
@@ -98,6 +114,67 @@ bool pd_session_write(void* ctx, uint32_t addr, const void* data, size_t len) {
         return true;
     }
     return false;
+}
+
+// --- REUSABLE TMS / INSTANT TEXT: the game's code patched in the cartridge, between frames, and put back when off ---
+
+static bool rom_write(struct pd_session* s, uint32_t addr, const uint8_t* data, int len) {
+    if (pd_armgba_is(s->core)) return pd_armgba_rom_write(addr, data, (size_t) len);
+    if (pd_gpsp_is(s->core)) return pd_gpsp_rom_write(addr, data, (size_t) len);
+    // mGBA (the dev build's switch): its cartridge is plain memory, nothing recompiled.
+    if (addr < 0x08000000u || addr - 0x08000000u + (uint32_t) len > s->romSize) return false;
+    memcpy((uint8_t*) s->rom + (addr - 0x08000000u), data, (size_t) len);
+    return true;
+}
+
+// [on]: each write's value over its expected bytes, else the bytes put back; only where the ROM holds one or the other.
+static bool rom_patch(struct pd_session* s, const struct pd_rom_write* w, int n, bool on) {
+    for (int i = 0; i < n; i++) {
+        const uint8_t* now = s->rom + (w[i].addr - 0x08000000u);
+        if (memcmp(now, w[i].expect, (size_t) w[i].len) && memcmp(now, w[i].value, (size_t) w[i].len)) return false;
+    }
+    for (int i = 0; i < n; i++) rom_write(s, w[i].addr, on ? w[i].value : w[i].expect, w[i].len);
+    return true;
+}
+
+static void options_sync(struct pd_session* s) {
+    bool tms = s->settings->reusableTms && s->tmCount > 0, text = s->settings->instantText && s->textCount > 0;
+    if (tms != s->tmApplied && rom_patch(s, s->tmWrites, s->tmCount, tms)) s->tmApplied = tms;
+    if (text != s->textApplied && rom_patch(s, s->textWrites, s->textCount, text)) s->textApplied = text;
+}
+
+// Which of them this game has: INSTANT TEXT from the first 64 KB; REUSABLE TMS a pass over the whole ROM, its sites kept
+// per ROM (pd_romart_fact) after the first.
+static void options_find(struct pd_session* s) {
+    s->tmCount = s->textCount = 0;
+    s->tmApplied = s->textApplied = false;
+    s->host.tmsSupported = s->host.textSupported = 0;
+    if (!s->game.cfg || s->game.cfg->gb || !s->rom) return;
+    uint32_t n = 0;
+    if (pd_romart_fact_get(&s->game, "tms", &n) && n <= PD_TM_SITES_MAX) {
+        uint32_t sites[PD_TM_SITES_MAX];
+        bool all = true;
+        for (uint32_t i = 0; i < n && all; i++) {
+            char name[8];
+            snprintf(name, sizeof name, "tms%u", (unsigned) i);
+            all = pd_romart_fact_get(&s->game, name, &sites[i]);
+        }
+        if (all && n) s->tmCount = pd_reusable_tm_at(s->rom, s->romSize, sites, (int) n, s->tmWrites);
+    } else {
+        s->tmCount = pd_reusable_tm_find(s->rom, s->romSize, s->tmWrites);
+        pd_romart_fact_set(&s->game, "tms", (uint32_t) s->tmCount);
+        for (int i = 0; i < s->tmCount; i++) {
+            char name[8];
+            snprintf(name, sizeof name, "tms%d", i);
+            pd_romart_fact_set(&s->game, name, s->tmWrites[i].addr - 6);
+        }
+    }
+    // Radical Red's, Unbound's and SoulGold's TMs never run out by themselves (ReusableTms.BUILT_IN): ON, greyed.
+    bool builtIn = s->game.guide == PD_GUIDE_UNBOUND || s->game.guide == PD_GUIDE_RADICAL_RED ||
+                   (s->game.title && !strncmp(s->game.title, "Pokémon SoulGold", strlen("Pokémon SoulGold")));
+    s->host.tmsSupported = s->tmCount ? 1 : builtIn ? 2 : 0;
+    s->textCount = pd_instant_text_find(s->rom, s->romSize, s->textWrites);
+    s->host.textSupported = s->textCount > 0;
 }
 
 void pd_session_show(struct pd_session* s, const char* text) {
@@ -167,11 +244,18 @@ bool pd_session_save_state(struct pd_session* s, int slot) {
     }
     char vfPath[512], path[512], thumb[520];
     state_paths(s, slot, vfPath, sizeof(vfPath), path, sizeof(path));
-    pd_mixer_release(s->core);
-    struct VFile* vf = VFileOpen(vfPath, O_CREAT | O_TRUNC | O_RDWR);
-    if (!vf) return false;
-    bool ok = mCoreSaveStateNamed(s->core, vf, STATE_FLAGS);
-    vf->close(vf);
+    bool ok;
+    pd_mixer_release(s->core); // a state never holds the hook
+    if (pd_armgba_is(s->core)) {
+        ok = pd_armgba_save_state(path);
+    } else if (pd_gpsp_is(s->core)) {
+        ok = pd_gpsp_save_state(path);
+    } else {
+        struct VFile* vf = VFileOpen(vfPath, O_CREAT | O_TRUNC | O_RDWR);
+        if (!vf) return false;
+        ok = mCoreSaveStateNamed(s->core, vf, STATE_FLAGS);
+        vf->close(vf);
+    }
     uint32_t* px = s->thumbs[slot];
     unsigned gw = 240, gh = 160;
     s->core->desiredVideoDimensions(s->core, &gw, &gh);
@@ -192,7 +276,16 @@ bool pd_session_save_state(struct pd_session* s, int slot) {
     return ok;
 }
 
-static void write_state(struct pd_session* s, const char* vfPath) {
+static void write_state(struct pd_session* s, const char* vfPath, const char* path) {
+    if (pd_armgba_is(s->core)) {
+        pd_mixer_release(s->core);
+        pd_armgba_save_state(path);
+        return;
+    }
+    if (pd_gpsp_is(s->core)) {
+        pd_gpsp_save_state(path);
+        return;
+    }
     struct VFile* vf = VFileOpen(vfPath, O_CREAT | O_TRUNC | O_RDWR);
     if (!vf) return;
     pd_mixer_release(s->core);
@@ -215,14 +308,35 @@ bool pd_session_undo_save(struct pd_session* s) {
     return true;
 }
 
+// A state into the running core: armGBA's own (an mGBA state from an earlier build is refused with a notice and left
+// where it is), else mGBA's.
+static bool load_state_file(struct pd_session* s, const char* vfPath, const char* path) {
+    if (pd_armgba_is(s->core)) {
+        enum pd_armgba_state r = pd_armgba_load_state(path);
+        if (r == PD_ARMGBA_STATE_FOREIGN) pd_session_show(s, "THAT STATE IS FROM AN OLDER BUILD");
+        else if (r == PD_ARMGBA_STATE_OTHER_GAME) pd_session_show(s, "THAT STATE IS ANOTHER GAME'S");
+        else if (r == PD_ARMGBA_STATE_BAD) pd_session_show(s, "THAT STATE DIDN'T LOAD");
+        return r == PD_ARMGBA_STATE_OK;
+    }
+    if (pd_gpsp_is(s->core)) {
+        enum pd_gpsp_state r = pd_gpsp_load_state(path);
+        if (r == PD_GPSP_STATE_FOREIGN) pd_session_show(s, "THAT STATE IS ANOTHER CORE'S");
+        else if (r == PD_GPSP_STATE_OTHER_GAME) pd_session_show(s, "THAT STATE IS ANOTHER GAME'S");
+        else if (r == PD_GPSP_STATE_BAD) pd_session_show(s, "THAT STATE DIDN'T LOAD");
+        return r == PD_GPSP_STATE_OK;
+    }
+    struct VFile* vf = VFileOpen(vfPath, O_RDONLY);
+    if (!vf) return false;
+    bool ok = mCoreLoadStateNamed(s->core, vf, STATE_FLAGS);
+    vf->close(vf);
+    return ok;
+}
+
 bool pd_session_undo_load(struct pd_session* s) {
     if (!s->host.undoLoad) return false;
     char vf[512], path[512];
     undo_path(s, "undoload", vf, sizeof(vf), path, sizeof(path));
-    struct VFile* f = VFileOpen(vf, O_RDONLY);
-    if (!f) return false;
-    bool ok = mCoreLoadStateNamed(s->core, f, STATE_FLAGS);
-    f->close(f);
+    bool ok = load_state_file(s, vf, path);
     if (ok) {
         pk_heal_rtc(s->core);
         pk_wide_reset();
@@ -237,12 +351,9 @@ bool pd_session_load_state(struct pd_session* s, int slot) {
     s->files.backupSave(s->files.ctx);
     char undoVf[512], undo[512];
     undo_path(s, "undoload", undoVf, sizeof(undoVf), undo, sizeof(undo));
-    write_state(s, undoVf);
+    write_state(s, undoVf, undo);
     s->host.undoLoad = true;
-    struct VFile* vf = VFileOpen(vfPath, O_RDONLY);
-    if (!vf) return false;
-    bool ok = mCoreLoadStateNamed(s->core, vf, STATE_FLAGS);
-    vf->close(vf);
+    bool ok = load_state_file(s, vfPath, path);
     if (ok) {
         pk_heal_rtc(s->core);
         pk_wide_reset(); // its RAM history is from before the jump
@@ -255,6 +366,55 @@ static void cheats_update(struct pd_session* s) {
     if (on == s->cheatsOn) return;
     s->cheatsOn = on;
     pk_cheats_apply(s->core, on ? s->cheatText : NULL, on ? s->cheatLen : 0);
+}
+
+static void fly_to(struct pd_session* s, int mapsec);
+
+// FREE FLIGHT's calls into the game (pk_flight.h).
+static int flight_call(struct mCore* core, uint32_t fn, const uint32_t args[4], uint32_t* r0) {
+    return pk_call(core, fn, args, r0) ? 1 : 0;
+}
+
+// pk_flight told this game's addresses, with FLY ON's vehicle (a change mid-flight just redraws).
+static void flight_configure(struct pd_session* s) {
+    uint32_t w[PK_FLIGHT_WORDS];
+    flight_words(s->flightCfg, s->settings->flightVehicle, w);
+    pk_flight_configure(w, PK_FLIGHT_WORDS);
+    s->flightVehicle = s->settings->flightVehicle;
+}
+
+// FLIGHT AREA's file: a line per map seen ("group.num"), one per ROM and save.
+static char flightAreaText[16384];
+
+static void flight_area_write(struct pd_session* s) {
+    struct flight_area* a = &s->flightArea;
+    if (!a->dirty || !a->key || !s->files.flightAreaPath) return;
+    a->dirty = false;
+    char path[512], tmp[520];
+    s->files.flightAreaPath(s->files.ctx, s->romCrc, a->key, path, sizeof(path));
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    size_t n = flight_area_format(a, flightAreaText, sizeof(flightAreaText));
+    FILE* f = fopen(tmp, "wb");
+    if (!f) return;
+    bool ok = fwrite(flightAreaText, 1, n, f) == n;
+    if (fclose(f) != 0) ok = false;
+    if (ok) {
+        remove(path);
+        rename(tmp, path);
+    }
+}
+
+static void flight_area_load(struct pd_session* s, uint32_t key) {
+    flight_area_write(s);
+    flight_area_clear(&s->flightArea, key);
+    if (!s->files.flightAreaPath) return;
+    char path[512];
+    s->files.flightAreaPath(s->files.ctx, s->romCrc, key, path, sizeof(path));
+    FILE* f = fopen(path, "rb");
+    if (!f) return;
+    size_t n = fread(flightAreaText, 1, sizeof(flightAreaText), f);
+    fclose(f);
+    flight_area_parse(&s->flightArea, flightAreaText, n);
 }
 
 static void cheats_load(struct pd_session* s) {
@@ -293,12 +453,155 @@ static bool smart_slows(const struct pd_session* s) {
     return s->wideKnown && pk_wide_scene() == PK_WIDE_SCENE_MENU;
 }
 
+static bool trade_evo_check(const struct pd_session* s);
+
+// --- NUZLOCKE (the app's companion/Nuzlocke.kt): per ROM, on or off and its run, fed from each sample ---
+
+static char nuzText[48 * 1024];
+
+static void nuz_save(struct pd_session* s) {
+    if (!s->nuzPath[0]) return;
+    int head = snprintf(nuzText, sizeof nuzText, "on\t%d\n", s->nuzOn ? 1 : 0);
+    size_t n = pd_nuz_encode(&s->nuz.run, nuzText + head, sizeof nuzText - (size_t) head);
+    if (!n) return;
+    char temp[310];
+    snprintf(temp, sizeof temp, "%s.tmp", s->nuzPath);
+    FILE* f = fopen(temp, "w");
+    if (!f) return;
+    bool ok = fwrite(nuzText, 1, (size_t) head + n, f) == (size_t) head + n;
+    ok = fclose(f) == 0 && ok;
+    if (ok) {
+        remove(s->nuzPath);
+        ok = rename(temp, s->nuzPath) == 0;
+    }
+    if (!ok) remove(temp);
+}
+
+static void nuz_load(struct pd_session* s) {
+    s->nuzOn = false;
+    pd_nuz_reset(&s->nuz, NULL);
+    // A game the tracker follows: the GBA games, not Emerald Rogue (a roguelike walks the same areas again every run).
+    s->nuzSupported = s->game.kind != PD_GAME_GB && s->game.cfg && !s->game.cfg->gb &&
+                      !(s->game.title && strstr(s->game.title, "Rogue"));
+    s->nuzPath[0] = 0;
+    if (s->nuzSupported && s->files.nuzlockePath) s->files.nuzlockePath(s->files.ctx, s->romCrc, s->nuzPath, sizeof s->nuzPath);
+    FILE* f = s->nuzPath[0] ? fopen(s->nuzPath, "r") : NULL;
+    if (f) {
+        size_t n = fread(nuzText, 1, sizeof nuzText - 1, f);
+        fclose(f);
+        nuzText[n] = 0;
+        s->nuzOn = !strncmp(nuzText, "on\t1", 4);
+        struct pd_nuz_run run;
+        pd_nuz_decode(&run, nuzText);
+        pd_nuz_reset(&s->nuz, &run);
+    }
+    s->host.nuzlockeSupported = s->nuzSupported;
+    s->host.nuzlockeOn = s->nuzOn;
+    s->host.nuzRun = &s->nuz.run;
+}
+
+static int nuz_caught(void* ctx, int dex) {
+    const struct pd_session* s = ctx;
+    return s->snap.dexOk && dex > 0 ? (pd_dex_caught(&s->snap, dex) ? 1 : 0) : -1;
+}
+
+static void nuz_feed(struct pd_session* s) {
+    const struct pd_snapshot* snap = &s->snap;
+    s->host.nuzArea = snap->mapsec;
+    const char* place = pd_mapsec_name(&s->game, snap->mapsec);
+    snprintf(s->host.nuzAreaName, sizeof s->host.nuzAreaName, "%s", place ? place : "");
+    if (!s->nuzOn || !s->nuzSupported) return;
+    static struct pd_nuz_sample sample;
+    memset(&sample, 0, sizeof sample);
+    sample.inBattle = snap->inBattle;
+    sample.trainer = snap->inBattle ? (snap->isTrainer ? 1 : 0) : -1;
+    sample.area = snap->mapsec;
+    snprintf(sample.areaName, sizeof sample.areaName, "%s", s->host.nuzAreaName);
+    // A foe the game's tables can't name, or at no real level, is a battle read wrong: no foe, so no encounter.
+    const struct pd_battle_mon* foe = &snap->battlers[PD_POS_OPPONENT_LEFT];
+    char name[40];
+    const char* foeName = foe->species ? pd_species_name(&s->game, foe->species, name, sizeof name) : NULL;
+    if (foe->species && foe->level >= 1 && foe->level <= 100 && foeName && foeName[0]) {
+        sample.foeSpecies = foe->species;
+        int dex = pd_dex_national(&s->game, foe->species);
+        sample.foeDex = dex > 0 ? dex : foe->species;
+        snprintf(sample.foeName, sizeof sample.foeName, "%s", foeName);
+    }
+    for (int i = 0; i < snap->partyCount && i < 6; i++) {
+        const struct pd_mon* m = &snap->party[i];
+        struct pd_nuz_party* p = &sample.party[sample.partyCount++];
+        p->personality = m->personality;
+        p->species = m->species;
+        p->level = m->level;
+        p->hp = m->hp;
+        p->maxHp = m->maxHp;
+        p->egg = m->egg || m->species == PD_SPECIES_EGG;
+        if (m->nickname[0]) snprintf(p->name, sizeof p->name, "%s", m->nickname);
+        else pd_species_name(&s->game, m->species, p->name, sizeof p->name);
+    }
+    sample.menuUp = snap->battleState == PD_BATTLE_ACTION || snap->battleState == PD_BATTLE_MOVE ||
+                    snap->battleState == PD_BATTLE_BAG_OPEN || snap->battleState == PD_BATTLE_PARTY_OPEN;
+    sample.caught = nuz_caught;
+    sample.ctx = s;
+    struct pd_nuz_events events = { .count = 0 };
+    if (pd_nuz_feed(&s->nuz, &sample, &events)) {
+        nuz_save(s);
+        s->redraw = true;
+    }
+    // The notices on the game screen, newest last (one shows at a time).
+    if (s->nuz.run.warnings && events.count) pd_session_show(s, events.text[events.count - 1]);
+}
+
+static void nuz_edit(struct pd_session* s) {
+    struct pd_ui* ui = &s->ui;
+    struct pd_nuz_run* r = &s->nuz.run;
+    switch ((enum pd_nuz_edit) ui->nuzEdit) {
+    case PD_NUZ_EDIT_OUTCOME: pd_nuz_set_outcome(r, ui->nuzArea, ui->nuzValue); break;
+    case PD_NUZ_EDIT_DEAD: pd_nuz_set_dead(r, ui->nuzPersonality, true, s->host.nuzAreaName); break;
+    case PD_NUZ_EDIT_ALIVE: pd_nuz_set_dead(r, ui->nuzPersonality, false, ""); break;
+    case PD_NUZ_EDIT_NEW_RUN: pd_nuz_new_run(r); break;
+    case PD_NUZ_EDIT_DUPES: r->dupes = !r->dupes; break;
+    case PD_NUZ_EDIT_WARNINGS: r->warnings = !r->warnings; break;
+    default: return;
+    }
+    nuz_save(s);
+    s->redraw = true;
+}
+
+// SCENE SPEEDS (EmulatorEngine's Scene): what's on screen, for its speed while FF is off; -1 = the field (GAME SPEED's).
+static int scene_now(const struct pd_session* s) {
+    int st = s->input.state;
+    // A battle's own bag and party screens count as menus, as SMART has them.
+    if (st == PD_BATTLE_PARTY_OPEN || st == PD_BATTLE_BAG_OPEN || (s->wideKnown && pk_wide_scene() == PK_WIDE_SCENE_MENU))
+        return PD_SCENE_MENU;
+    if (s->shown.inBattle || (s->fieldFlags & PK_FIELD_BATTLE) || st != PD_BATTLE_NONE) return PD_SCENE_BATTLE;
+    if (!(s->fieldFlags & PK_FIELD_KNOWN)) return -1;
+    if (s->fieldFlags & PK_FIELD_TEXT) return PD_SCENE_TEXT;
+    // Riding / surfing on the field (a cutscene that holds the controls stays the field's).
+    if ((s->fieldFlags & (PK_FIELD_LOCKED | PK_FIELD_AVATAR)) == PK_FIELD_AVATAR) {
+        if (s->fieldFlags & PK_FIELD_SURF) return PD_SCENE_SURF;
+        if (s->fieldFlags & PK_FIELD_BIKE) return PD_SCENE_BIKE;
+    }
+    return -1;
+}
+
 void pd_session_start(struct pd_session* s, struct mCore* core, const uint32_t* video, struct pd_settings* settings,
                       const struct pd_session_host* files) {
     s->core = core;
     s->video = video;
     s->settings = settings;
+    s->lastAspect = settings->aspect;
     s->files = *files;
+    s->prof.startSteps = 0;
+    uint64_t markAt = files->clock ? files->clock() : 0;
+#define START_MARK(name) do { \
+        if (files->clock && s->prof.startSteps < 16) { \
+            uint64_t t = files->clock(); \
+            s->prof.startName[s->prof.startSteps] = name; \
+            s->prof.startTicks[s->prof.startSteps++] = t - markAt; \
+            markAt = t; \
+        } \
+    } while (0)
     bool gba = core->platform(core) == mPLATFORM_GBA;
     if (gba) {
         pd_mixer_attach(core);
@@ -315,15 +618,32 @@ void pd_session_start(struct pd_session* s, struct mCore* core, const uint32_t* 
     s->romSize = s->game.romSize;
     // Which game this is, by its SHA-1 (a hack gets its own config, gamedata's; the app's look for it, pd_games_gen.c).
     pd_game_identify(&s->game);
+    START_MARK("identify");
     if (gba) {
         pd_romart_scan(&s->game);
+        START_MARK("romart");
         pd_map_art(&s->game);
+        START_MARK("map art");
         pk_rest_reset();
+        // After the SHA-1 above: this changes the ROM in memory (pd_armgba.h).
+        if (pd_armgba_is(core)) {
+            // Its two routines' places kept per ROM: the pass for them was ~0.3 s of a 32 MB hack's start on a 3DS.
+            uint32_t a, b;
+            bool kept = pd_romart_fact_get(&s->game, "flash1", &a) && pd_romart_fact_get(&s->game, "flash2", &b);
+            long start = kept ? (long) (int32_t) a : -2, stop = kept ? (long) (int32_t) b : -2;
+            pd_armgba_fast_flash_saves(&start, &stop);
+            if (!kept) {
+                pd_romart_fact_set(&s->game, "flash1", (uint32_t) start);
+                pd_romart_fact_set(&s->game, "flash2", (uint32_t) stop);
+            }
+        }
     }
 
     pd_look_apply(&s->game, settings);
     pd_ui_init(&s->ui, settings);
+    START_MARK("look+ui");
     pd_binput_init(&s->input, &s->game, pd_session_read, pd_session_write, s);
+    START_MARK("battle input");
     s->ui.battleInput = &s->input;
     s->ui.tab = PD_TAB_PARTY;
     s->host.hasStates = files->statePath != NULL;
@@ -331,26 +651,60 @@ void pd_session_start(struct pd_session* s, struct mCore* core, const uint32_t* 
     if (files->statePath)
         for (int i = 0; i < PD_STATE_SLOTS; i++) read_slot(s, i);
 
+    START_MARK("state slots");
     core->checksum(core, &s->romCrc, mCHECKSUM_CRC32);
+    START_MARK("crc");
     cheats_load(s);
     s->wideKnown = pk_wide_configure(s->romCrc) != 0;
+    START_MARK("cheats+expand");
     pk_wide_cache(1);
     pk_wide_hole(1);
     pk_wide_later(1, files->wideJoin);
     s->fieldKnown = gba && pk_field_configure(s->romCrc) != 0;
-    s->wildSwitch = s->fieldKnown ? pk_wild_switch_find(s->rom, s->romSize) : 0;
+    // WILD ENCOUNTERS' switch: a pass over the ROM (~0.3 s of a 32 MB hack's start on a 3DS), kept per ROM after the first.
+    s->wildSwitch = 0;
+    if (s->fieldKnown && !pd_romart_fact_get(&s->game, "wild", &s->wildSwitch)) {
+        s->wildSwitch = pk_wild_switch_find(s->rom, s->romSize);
+        pd_romart_fact_set(&s->game, "wild", s->wildSwitch);
+    }
     if (s->wildSwitch) pk_field_wild(s->wildSwitch, settings->wildOff);
     s->host.hasExpand = true;
     s->host.expandGame = s->wideKnown;
     s->host.hasHud = true;
+    pd_font_size_set(1);
     s->host.hasPerf = true;
     s->host.fullSettings = true;
     s->gbField = !gba && s->game.cfg ? gb_field_find(s->rom, s->romSize) : NULL;
     s->host.wildSupported = s->wildSwitch != 0 || s->gbField;
     s->host.fieldSupported = s->fieldKnown;
+    START_MARK("field+wild");
+    options_find(s);
+    options_sync(s);
+    s->tradeEvoOk = trade_evo_check(s);
+    nuz_load(s);
+    s->host.tradeEvoSupported = s->tradeEvoOk;
+    s->evolveAsk = false;
+    START_MARK("tms+text");
 
     const struct pd_config* cfg = s->game.cfg;
     s->flyCfg = cfg && fly_supported(cfg, s->rom, s->romSize) ? cfg : NULL;
+    s->flashCfg = cfg && flash_supported(cfg, s->rom, s->romSize) ? cfg : NULL;
+    s->flashAsk = 0;
+    // FREE FLIGHT: retail English FireRed / LeafGreen / Emerald (a retail hash, a dump or a randomized copy of one), like
+    // the app's flightAllowed. The flight starts unconfigured: a state taken in the air comes back flying once it is.
+    pk_flight_set_call(flight_call);
+    pk_flight_configure(NULL, 0);
+    pk_flight_reset();
+    bool retail = gba && (s->game.retail || !strncmp(s->game.code, "BPG", 3));
+    s->flightCfg = cfg && flight_supported(cfg, s->rom, s->romSize, retail) ? cfg : NULL;
+    s->flightAsk = s->scenicAsk = 0;
+    s->scenic = s->flightDrawn = s->flightAreaAnywhere = false;
+    s->flightState = PK_FLIGHT_IDLE;
+    flight_area_clear(&s->flightArea, 0);
+    START_MARK("fly+flash");
+    if (s->flightCfg) flight_configure(s);
+    s->host.flightSupported = s->flightCfg != NULL;
+    START_MARK("flight");
     s->itemsOk = cfg && field_items_supported(cfg, s->rom, s->romSize);
     s->pcOk = s->itemsOk && pc_supported(cfg, s->rom, s->romSize);
     s->bikeOk = s->itemsOk && bike_supported(cfg);
@@ -358,21 +712,46 @@ void pd_session_start(struct pd_session* s, struct mCore* core, const uint32_t* 
     if (cfg && pd_boxes_supported(&s->game)) s->ui.boxes = &s->boxes;
     s->ui.boxMoves = s->ui.boxes && s->itemsOk && pd_box_moves_ok(cfg, s->game.entry ? s->game.entry->boxSwap : NULL, s->rom, s->romSize);
     s->ui.boxSummary = s->ui.boxSlot = -1;
-    s->host.itemCanUse = pd_items_can_use;
+    s->tmCfg = cfg && tm_supported(cfg, s->rom, s->romSize) ? cfg : NULL;
+    s->tmStage = 0;
+    itemTmCfg = s->tmCfg;
+    s->host.itemCanUse = item_can_use;
     s->host.itemCanGive = pd_items_can_give;
 
+    START_MARK("items+boxes");
     // What the companion shows: read once now (RAM still blank: an empty party), then every PD_SNAPSHOT_EVERY frames.
     pd_snapshot_read(&s->shown, &s->game, pd_session_read, s);
+    START_MARK("snapshot");
+#undef START_MARK
     s->shown.frame = 0;
     s->frame = 0;
     s->redraw = true;
+}
+
+bool pd_session_game_boy(const struct pd_session* s) {
+    unsigned w = 240, h = 160;
+    s->core->desiredVideoDimensions(s->core, &w, &h);
+    return w == 160;
 }
 
 static bool in_battle(const struct pd_session* s) {
     return s->shown.inBattle || (s->wideKnown && pk_wide_scene() == PK_WIDE_SCENE_BATTLE_START);
 }
 
+// EXPAND and ZOOM OUT give way to the whole screen, stretched, on the game's own menu screens (the title, CONTINUE, the
+// party, the bag ...): there's no map past them to show, and drawing their margins every frame cost the frame.
+static bool menu_screen(const struct pd_session* s) {
+    if (!s->wideKnown || s->settings->aspect == PD_ASPECT_ORIGINAL || s->flightState != PK_FLIGHT_IDLE || in_battle(s)) return false;
+    int scene = pk_wide_scene();
+    // OFF is a battle too: only with the battle flag read this very frame (the snapshot's comes later) saying it isn't. A
+    // fade from a menu screen (the intro's, the title's to CONTINUE) stays one.
+    return scene == PK_WIDE_SCENE_MENU || (scene == PK_WIDE_SCENE_OFF && s->fieldKnown && !(s->fieldFlags & PK_FIELD_BATTLE)) ||
+           (scene == PK_WIDE_SCENE_FADE && s->menuLatched);
+}
+
 int pd_session_screen(const struct pd_session* s) {
+    // A Game Boy game keeps its shape on them (the screen's height, white bars beside: stretched, its letters went uneven).
+    if (menu_screen(s)) return pd_session_game_boy(s) ? PD_SCREEN_SHARP : PD_SCREEN_STRETCH;
     int mode = s->settings->screenMode;
     if (mode == PD_SCREEN_PIXEL && s->wideKnown && s->settings->aspect != PD_ASPECT_ORIGINAL) mode = PD_SCREEN_SHARP_125;
     if (mode != PD_SCREEN_STRETCH && in_battle(s)) mode = PD_SCREEN_SHARP;
@@ -387,8 +766,10 @@ const uint32_t* pd_session_perf(unsigned fpsTenths, unsigned cpuPercent, int* w)
     char text[32];
     snprintf(text, sizeof(text), "%u.%u FPS  CPU %u%%", fpsTenths / 10, fpsTenths % 10, cpuPercent);
     *w = pd_text_width(text) + 8;
-    pd_round_rect(&c, 0, 0, *w, PD_PERF_H - 2, 2, 0xB8121620u);
-    pd_text(&c, 4, 1, text, 0xF8F8F8, 0x303840);
+    // The capitals (font rows 4-12) and their shadow centred in the box: 2 rows above, 2 under.
+    const int boxH = PD_PERF_H - 2;
+    pd_round_rect(&c, 0, 0, *w, boxH, 2, 0xB8121620u);
+    pd_text(&c, 4, (boxH - 10) / 2 - 4, text, 0xF8F8F8, 0x303840);
     for (int i = 0; i < PD_PERF_W * PD_PERF_H; i++)
         if (px[i] && !(px[i] >> 24)) px[i] |= 0xFF000000u;
     return px;
@@ -409,7 +790,9 @@ static void wide_window(const struct pd_session* s, int aspect, int* w, int* h) 
 }
 
 #define ORIGINAL_SCENE_EVERY 16
+#define MENU_SCENE_EVERY 4 // on a menu screen (menu_screen): the way back to the field goes through a fade longer than this
 
+#define FLIGHT_CLOUDS 1
 // The frame that will be shown: with mGBA's renderer on its own thread (New 3DS) the last lines may still be coming,
 // and getPixels is what waits for them. EXPAND's margins are worked out meanwhile.
 static void frame_whole(void* ctx) {
@@ -420,7 +803,28 @@ static void frame_whole(void* ctx) {
     const void* pixels;
     uint64_t start = s->files.clock ? s->files.clock() : 0;
     s->core->getPixels(s->core, &pixels, &stride);
-    if (s->files.clock) s->prof.wait += s->files.clock() - start;
+    uint64_t whole = s->files.clock ? s->files.clock() : 0;
+    s->prof.wait += whole - start;
+    if (s->flightPending) {
+        // FREE FLIGHT's shadow and bird go into the frame here, once it's whole and before anything reads it: EXPAND
+        // works out what it can meanwhile, as on foot (drawing them first held the game's thread until the frame was done).
+        s->flightPending = false;
+        pk_flight_draw((uint32_t*) s->video, PD_GAME_STRIDE, 160, PD_GAME_STRIDE, FLIGHT_CLOUDS);
+        s->prof.flightDraw += (s->files.clock ? s->files.clock() : 0) - whole;
+    }
+}
+
+// FREE FLIGHT's clouds over EXPAND's margins (the frame has its own: pk_flight_draw), planned with the view and drawn
+// once the picture is whole - after pk_wide_finish, on whichever thread that runs.
+static struct PkFlightClouds wideClouds;
+static uint32_t* wideCloudsOut;
+static int wideCloudsW, wideCloudsH;
+
+void pd_session_wide_finish(void) {
+    pk_wide_finish();
+    if (!wideCloudsOut) return;
+    pk_flight_clouds_margins(&wideClouds, wideCloudsOut, wideCloudsW, wideCloudsH);
+    wideCloudsOut = NULL;
 }
 
 static void wide_tick(struct pd_session* s, bool skip) {
@@ -431,6 +835,9 @@ static void wide_tick(struct pd_session* s, bool skip) {
     // took 7 ms of a New 3DS's 16.7, and with the game's own 9 that's one refresh too many.
     bool original = s->settings->aspect == PD_ASPECT_ORIGINAL;
     if (original && s->frame % ORIGINAL_SCENE_EVERY) return;
+    bool menu = !original && menu_screen(s);
+    s->menuLatched = menu;
+    if (menu && s->frame % MENU_SCENE_EVERY) return;
     int fw = pk_wide_frame_w(), fh = pk_wide_frame_h();
     // A GBA frame is already the rows EXPAND reads; a Game Boy's is narrower than the buffer's.
     const uint32_t* source = s->video;
@@ -443,15 +850,18 @@ static void wide_tick(struct pd_session* s, bool skip) {
         pk_wide_skip(s->core, source);
         return;
     }
-    if (original) {
+    if (original || menu) {
         // A one-pixel window.
         static uint32_t px;
         pk_wide_view(s->core, source, &px, (struct PkWideView) { 0, 0, 1, 1 }, NULL);
         pk_wide_finish();
         return;
     }
-    int aspect = s->settings->aspect == PD_ASPECT_ZOOM_OUT && (in_battle(s) || (s->settings->autoZoom &&
+    // A flight's controls are held (the map's sign as it crosses): no pull-in for that. The scenic FLY is shown zoomed out.
+    bool flying = s->flightState != PK_FLIGHT_IDLE;
+    int aspect = s->settings->aspect == PD_ASPECT_ZOOM_OUT && (in_battle(s) || (s->settings->autoZoom && !flying &&
         pk_wide_scene() != PK_WIDE_SCENE_FIELD)) ? PD_ASPECT_EXPAND : s->settings->aspect;
+    if (s->scenic && flying && aspect == PD_ASPECT_EXPAND) aspect = PD_ASPECT_ZOOM_OUT;
     wide_window(s, aspect, &s->wideW, &s->wideH);
     struct PkWideView v = { (fw - s->wideW) / 2, (fh - s->wideH) / 2, s->wideW, s->wideH };
     wideShown ^= 1;
@@ -459,13 +869,29 @@ static void wide_tick(struct pd_session* s, bool skip) {
     pk_wide_view(s->core, source, wideFrames[wideShown], v, NULL);
     pk_wide_frame_wait(NULL, NULL);
     frame_whole(s);
-    if (pk_wide_due()) {
-        if (s->files.wideGo) s->files.wideGo();
-        else pk_wide_finish();
+    // (pk_wide_view joined any finish still running: the plan is free to change.)
+    wideCloudsOut = NULL;
+    // FREE FLIGHT's clouds, as on Android: over the frame (pk_flight_draw) and the margins here. Off for a while (the user's
+    // call: ~3.5 ms a frame on the game's thread and more on the fourth core), back since pk_flight.c's flDrawCloudsAt walks
+    // the sheet's lit runs and blends two channels a multiply (~3.5x cheaper, every pixel the same). FLIGHT_CLOUDS 0: off.
+    if (FLIGHT_CLOUDS && s->flightCfg) {
+        pk_flight_clouds_plan(&wideClouds, v.x, v.y, fw, fh);
+        if (wideClouds.strength > 0) {
+            wideCloudsOut = wideFrames[wideShown];
+            wideCloudsW = v.w;
+            wideCloudsH = v.h;
+        }
     }
+    if (pk_wide_due() && s->files.wideGo) s->files.wideGo();
+    else pd_session_wide_finish();
     s->wideReady = !pk_wide_fault();
     s->wideHole = (struct pd_wide_hole) { 0 };
     if (pk_wide_holed()) {
+        // FREE FLIGHT's smooth camera moved the view (pk_wide_view adds its offset): the frame's place moved with it.
+        int fdx = 0, fdy = 0;
+        pk_wide_flight_offset(&fdx, &fdy);
+        v.x += fdx;
+        v.y += fdy;
         struct pd_wide_hole* h = &s->wideHole;
         h->x = v.x < 0 ? -v.x : 0;
         h->y = v.y < 0 ? -v.y : 0;
@@ -480,6 +906,21 @@ void pd_session_set_video(struct pd_session* s, const uint32_t* video) {
     if (video != s->video) s->nextVideo = video;
 }
 
+// FREE FLIGHT in a view without EXPAND (SHARP 1.5x, STRETCH): one direction at a time, the newer of the two held (let it
+// go and the other flies on). A diagonal there is a staircase of the game's own camera - EXPAND's glide (pk_wide.c's
+// flyGlide) is what smooths it, and there's no EXPAND to move.
+static uint32_t flight_one_way(struct pd_session* s, uint32_t keys) {
+    const uint32_t H = PD_KEY_LEFT | PD_KEY_RIGHT, V = PD_KEY_UP | PD_KEY_DOWN;
+    uint32_t h = keys & H, v = keys & V, fresh = keys & ~s->flightKeysWas;
+    s->flightKeysWas = keys;
+    if ((fresh & H) && !(fresh & V)) s->flightVertical = false;
+    else if ((fresh & V) && !(fresh & H)) s->flightVertical = true;
+    else if (!h) s->flightVertical = true;
+    else if (!v) s->flightVertical = false;
+    if (!h || !v) return keys;
+    return keys & ~(s->flightVertical ? H : V);
+}
+
 void pd_session_run_frame(struct pd_session* s, uint32_t playerKeys, bool last) {
     if (s->nextVideo) {
         s->core->setVideoBuffer(s->core, (color_t*) s->nextVideo, PD_GAME_STRIDE);
@@ -487,6 +928,10 @@ void pd_session_run_frame(struct pd_session* s, uint32_t playerKeys, bool last) 
         s->nextVideo = NULL;
     }
     bool exclusive = false;
+    if (s->flightState != PK_FLIGHT_IDLE && (!s->wideKnown || s->settings->aspect == PD_ASPECT_ORIGINAL))
+        playerKeys = flight_one_way(s, playerKeys);
+    else
+        s->flightKeysWas = playerKeys;
     uint32_t script = pd_binput_tick(&s->input, &exclusive);
     uint32_t keys = exclusive ? script : (playerKeys | script);
     // AUTO-RUN: B flipped while walking on the player's own field (holding it walks) - never in a script, a battle, a
@@ -499,10 +944,14 @@ void pd_session_run_frame(struct pd_session* s, uint32_t playerKeys, bool last) 
         s->gameKeyFrames--;
     }
     s->core->setKeys(s->core, keys);
+    // Fast-forward's frames that aren't shown: armGBA and gpSP needn't draw them.
+    if (pd_armgba_is(s->core)) pd_armgba_skip_video(!last);
+    else if (pd_gpsp_is(s->core)) pd_gpsp_skip_video(!last);
     uint64_t start = s->files.clock ? s->files.clock() : 0;
     s->core->runFrame(s->core);
     uint64_t ran = s->files.clock ? s->files.clock() : 0;
     s->prof.run += ran - start;
+    if (s->game.kind != PD_GAME_GB) pk_wide_after_frame(s->core);
     if (s->game.kind != PD_GAME_GB) {
         pk_rest_note(s->core);
         pd_mixer_frame(s->core);
@@ -510,6 +959,20 @@ void pd_session_run_frame(struct pd_session* s, uint32_t playerKeys, bool last) 
     if (s->fieldKnown)
         s->fieldFlags = pk_field_state(s->core, s->settings->runIndoors, s->wildSwitch && s->settings->wildOff ? 0 : 100);
     s->framePending = last;
+    if (s->flightCfg) {
+        // FREE FLIGHT's next step, then its shadow and bird into the finished frame (before EXPAND reads it).
+        uint64_t t0 = s->files.clock ? s->files.clock() : 0;
+        pk_flight_tick(s->core);
+        s->flightState = pk_flight_state();
+        uint64_t t1 = s->files.clock ? s->files.clock() : 0;
+        s->prof.flightTick += t1 - t0;
+        if (last && (s->flightState != PK_FLIGHT_IDLE || s->flightDrawn)) {
+            // Drawn by frame_whole (the clouds, when FLIGHT_CLOUDS, go into the frame itself: the 3DS's EXPAND may show
+            // the frame in its middle - its hole - so the margins get theirs apart in pd_session_wide_finish).
+            s->flightPending = true;
+            s->flightDrawn = s->flightState != PK_FLIGHT_IDLE;
+        }
+    }
     uint64_t wideStart = s->files.clock ? s->files.clock() : 0;
     wide_tick(s, !last);
     frame_whole(s);
@@ -529,6 +992,7 @@ void pd_session_run_frame(struct pd_session* s, uint32_t playerKeys, bool last) 
     if ((stateChanged || s->frame % PD_SNAPSHOT_EVERY == 0) && (s->game.kind == PD_GAME_GB || (s->ewram && s->iwram))) {
         pd_snapshot_read(&s->snap, &s->game, pd_session_read, s);
         pd_ui_update(&s->ui, &s->snap);
+        nuz_feed(s);
         // Only a change the companion shows is worth a redraw (not the frame counter).
         s->snap.frame = 0;
         if (memcmp(&s->snap, &s->shown, sizeof(s->snap))) {
@@ -560,6 +1024,8 @@ static void quick_items(struct pd_session* s) {
     const struct pd_snapshot* snap = &s->shown;
     s->host.flyReady = s->flyCfg && fly_flyer(snap) >= 0;
     s->host.canTake = pd_items_can_take();
+    // SWITCH: a GBA game whose party the companion reads (its records traded whole, as swapPartySlots does).
+    s->host.canSwitchParty = s->game.kind != PD_GAME_GB && s->game.cfg && s->game.cfg->playerParty;
     const struct pd_config* cfg = s->game.cfg;
     struct quick_item* q = s->quick;
     int n = 0;
@@ -569,6 +1035,23 @@ static void quick_items(struct pd_session* s) {
         int flyer = fly_flyer(snap);
         q[n++] = (struct quick_item) { QUICK_FLY, false, false, flyer < 0 ? "No one in your party knows FLY" : NULL,
                                        flyer < 0 ? 0 : snap->party[flyer].species, 0, NULL };
+    }
+    s->host.flightReady = s->flightCfg && fly_flyer(snap) >= 0;
+    s->host.flying = s->flightState != PK_FLIGHT_IDLE;
+    if (s->flightCfg) {
+        // TAKE OFF (QuickMenu.kt's quickBlocked): up there LAND always can, the bird finds the nearest ground.
+        bool flying = s->flightState != PK_FLIGHT_IDLE;
+        const char* why = flying ? NULL : snap->inBattle ? "Not during a battle"
+                        : fly_flyer(snap) < 0 ? "No one in your party knows FLY" : NULL;
+        q[n++] = (struct quick_item) { flying ? QUICK_LAND : QUICK_FLIGHT, false, false, why, 0, 0, NULL };
+    }
+    if (s->flashCfg) {
+        // FLASH (QuickMenu.kt's quickBlocked): who knows it, then whether it's dark here at all.
+        bool flasher = flash_flasher(snap) >= 0;
+        int dark = flash_dark(s->core, s->flashCfg, snap);
+        q[n++] = (struct quick_item) { QUICK_FLASH, false, false,
+                                       !flasher ? flash_reason(FLASH_NO_FLASHER) : dark == 0 ? flash_reason(FLASH_CANT_USE_HERE) : NULL,
+                                       0, 0, NULL };
     }
     if (s->itemsOk) {
         s->repelKindCount = 0;
@@ -671,9 +1154,7 @@ static void quick_input(struct pd_session* s, const struct pd_input* in) {
             s->flyList = false;
         } else if ((down & PD_KEY_A) && n) {
             s->quickOpen = s->flyList = false;
-            s->flyMapsec = s->flyTargets.towns[s->flySel];
-            s->flyStage = 1;
-            s->flyWait = 0;
+            fly_to(s, s->flyTargets.towns[s->flySel]);
         }
         return;
     }
@@ -687,7 +1168,13 @@ static void quick_input(struct pd_session* s, const struct pd_input* in) {
         s->quickSel = (in->stickAngle * s->quickCount + 180) / 360 % s->quickCount;
     const struct quick_item* item = &s->quick[s->quickSel];
     if (!(down & PD_KEY_A) || item->why) return;
-    if (item->action == QUICK_FLY) {
+    if (item->action == QUICK_FLASH) {
+        s->quickOpen = false;
+        s->flashAsk = 1; // run between two frames
+    } else if (item->action == QUICK_FLIGHT || item->action == QUICK_LAND) {
+        s->quickOpen = false;
+        s->flightAsk = 1;
+    } else if (item->action == QUICK_FLY) {
         s->flyAsk = 1; // answered between two frames
     } else if (item->action == QUICK_REPEL && s->repelKindCount > 1) {
         // More than one kind: their list (QuickMenu.kt's RepelKinds), each with how many and its steps.
@@ -703,6 +1190,106 @@ static void quick_input(struct pd_session* s, const struct pd_input* in) {
         s->repelSel = s->repelKindCount - 1;
     } else {
         quick_run(s, item);
+    }
+}
+
+// FLY to [mapsec]: the game's own (FLY STYLE CLASSIC, or a game without FREE FLIGHT), else up on the bird and over the
+// field to it (the scenic FLY), routed between two frames.
+static void fly_to(struct pd_session* s, int mapsec) {
+    s->flyMapsec = mapsec;
+    if (s->flightCfg && !s->settings->flyClassic && s->game.kind != PD_GAME_GB) {
+        s->scenicMapsec = mapsec;
+        s->scenicAsk = 1;
+    } else {
+        s->flyStage = 1;
+        s->flyWait = 0;
+    }
+}
+
+// FLIGHT AREA (FlightArea.Keeper.tick): the save checked, seeded once a run, the player's map added while they stand on the
+// field, pk_flight given the maps when they changed. [now]: before a take-off, not just every half second.
+static void flight_area_job(struct pd_session* s, bool busy, bool battle, bool now) {
+    struct mCore* c = s->core;
+    struct flight_area* a = &s->flightArea;
+    if (s->settings->flightAnywhere) {
+        if (!s->flightAreaAnywhere) pk_flight_set_area(NULL, 0);
+        s->flightAreaAnywhere = true;
+        return;
+    }
+    if (s->flightAreaAnywhere) a->sent = -1;
+    s->flightAreaAnywhere = false;
+    if (!now && s->frame % 30) return;
+    uint32_t key = flight_save_key(c, s->flightCfg);
+    if (!key) return;
+    if (key != a->key) flight_area_load(s, key);
+    if (!a->seeded && pk_call_safe(c)) flight_area_seed(a, c, s->flightCfg, s->rom, s->romSize);
+    struct flight_spot here;
+    if (!busy && !battle && s->flightState == PK_FLIGHT_IDLE && flight_here(c, s->flightCfg, &here)) flight_area_add(a, here.map);
+    if (a->count != a->sent) {
+        pk_flight_set_area(a->bits, PK_FLIGHT_AREA_BYTES);
+        a->sent = a->count;
+    }
+    flight_area_write(s);
+}
+
+// TAKE OFF / LAND and the scenic FLY, between two frames (PokeDaisyActivity's toggleFlight / scenicFly).
+static void flight_jobs(struct pd_session* s, bool busy, bool battle) {
+    struct mCore* c = s->core;
+    const struct pd_config* cfg = s->flightCfg;
+    if (s->settings->flightVehicle != s->flightVehicle) flight_configure(s);
+    flight_area_job(s, busy, battle, false);
+    // The bird turned at a map not seen yet: say why, now and then (it can be met many times a second).
+    if (pk_flight_area_turned() && (unsigned) (s->frame - s->flightAreaTold) > 240) {
+        s->flightAreaTold = s->frame;
+        pd_session_show(s, "You haven't been there yet.");
+    }
+    if (s->scenic && s->flightState == PK_FLIGHT_IDLE) s->scenic = false;
+    if (s->flightAsk && s->flightState != PK_FLIGHT_IDLE) {
+        s->flightAsk = 0;
+        pk_flight_land();
+    } else if (s->flightAsk || s->scenicAsk) {
+        if (!pk_call_safe(c)) {
+            if ((s->flightAsk && ++s->flightAsk > 120) || (s->scenicAsk && ++s->scenicAsk > 120)) {
+                s->flightAsk = s->scenicAsk = 0;
+                pd_session_show(s, fly_reason(FLY_FAILED));
+            }
+            return;
+        }
+        bool scenic = s->scenicAsk != 0;
+        s->flightAsk = s->scenicAsk = 0;
+        pd_snapshot_read(&s->snap, &s->game, pd_session_read, s);
+        enum fly_result gate = flight_check(c, cfg, s->rom, s->romSize, &s->snap, busy, battle);
+        if (gate != FLY_OK) {
+            pd_session_show(s, fly_reason(gate));
+            return;
+        }
+        flight_area_job(s, busy, battle, true);
+        static uint8_t route[FLIGHT_MAX_STEPS];
+        int steps = -1;
+        if (scenic) {
+            // FLIGHT AREA's maps only (none known yet: anywhere); a town past them, or not joined to here, flies the classic way.
+            const struct flight_area* area = !s->settings->flightAnywhere && s->flightArea.key ? &s->flightArea : NULL;
+            struct flight_spot here, dest;
+            if (flight_here(c, cfg, &here) && flight_destination(c, cfg, s->rom, s->romSize, s->scenicMapsec, &dest))
+                steps = flight_route(c, cfg, s->rom, s->romSize, &here, &dest, area, route);
+            if (steps < 0) {
+                s->flyStage = 1;
+                s->flyWait = 0;
+                return;
+            }
+        }
+        flight_configure(s);
+        int code = pk_flight_take_off(c);
+        if (code == PK_FLIGHT_OK && scenic) {
+            pk_flight_route(route, steps);
+            s->scenic = true;
+        } else if (code == PK_FLIGHT_NOT_ON_FOOT && scenic) {
+            // Surfing: the bird can't take off from the water - the game's own FLY can.
+            s->flyStage = 1;
+            s->flyWait = 0;
+        } else if (code != PK_FLIGHT_OK) {
+            pd_session_show(s, flight_reason(code));
+        }
     }
 }
 
@@ -746,7 +1333,16 @@ static void gb_jobs(struct pd_session* s) {
     }
 }
 
+// The TM screen's second step, once the fade has reached black (TmTeach.kt's tmFinish).
+static void tm_jobs(struct pd_session* s) {
+    if (!s->tmCfg || s->tmStage != 1 || ++s->tmWait < TM_FADE_FRAMES || !pk_call_safe(s->core)) return;
+    s->tmStage = 0;
+    bool left = tm_main_callback(s->core, s->tmCfg) != s->tmCallback;
+    if (!tm_finish(s->core, s->tmCfg, s->tmItem, left) && !left) pd_session_show(s, tm_reason(TM_FAILED));
+}
+
 static void field_jobs(struct pd_session* s) {
+    tm_jobs(s);
     if (s->gbField) {
         gb_jobs(s);
         return;
@@ -755,6 +1351,18 @@ static void field_jobs(struct pd_session* s) {
     const struct pd_config* cfg = s->game.cfg;
     bool battle = s->shown.inBattle || (s->fieldFlags & PK_FIELD_BATTLE);
     bool busy = (s->fieldFlags & PK_FIELD_LOCKED) || (s->wideKnown && pk_wide_scene() != PK_WIDE_SCENE_FIELD);
+    if (s->flightCfg) flight_jobs(s, busy, battle);
+    if (s->flashCfg && s->flashAsk) {
+        if (pk_call_safe(c)) {
+            pd_snapshot_read(&s->snap, &s->game, pd_session_read, s);
+            enum flash_result r = flash_use(c, s->flashCfg, s->rom, s->romSize, &s->snap, busy, battle);
+            s->flashAsk = 0;
+            if (r != FLASH_OK) pd_session_show(s, flash_reason(r));
+        } else if (++s->flashAsk > 120) {
+            s->flashAsk = 0;
+            pd_session_show(s, flash_reason(FLASH_FAILED));
+        }
+    }
     if (s->flyCfg && s->flyAsk && (s->quickOpen || s->flyFromMap)) {
         if (pk_call_safe(c)) {
             pd_snapshot_read(&s->snap, &s->game, pd_session_read, s);
@@ -863,7 +1471,18 @@ static void item_jobs(struct pd_session* s) {
     const struct pd_config* cfg = s->game.cfg;
     bool battle = s->shown.inBattle || (s->fieldFlags & PK_FIELD_BATTLE);
     bool busy = battle || (s->wideKnown && pk_wide_scene() != PK_WIDE_SCENE_FIELD);
-    if (ask == 1) {
+    if (ask == 1 && !ui->itemGive && s->tmCfg && tm_teaches(s->tmCfg, ui->itemId)) {
+        // A TM / HM: the game's own TM screen, the way its bag opens it (two steps: the fade, then the screen).
+        enum tm_result r = tm_start(s->core, s->tmCfg, ui->itemId, busy || (s->fieldFlags & PK_FIELD_LOCKED));
+        if (r == TM_STARTED) {
+            s->tmStage = 1;
+            s->tmWait = 0;
+            s->tmItem = ui->itemId;
+            s->tmCallback = tm_main_callback(s->core, s->tmCfg);
+        } else {
+            pd_session_show(s, tm_reason(r));
+        }
+    } else if (ask == 1) {
         pd_items_targets(s->core, cfg, ui->itemId, ui->itemGive, busy, &s->itemTargets);
         if (s->itemTargets.result != PD_ITEM_USED) {
             pd_session_show(s, pd_item_outcome_text(s->itemTargets.result));
@@ -893,6 +1512,130 @@ static void item_jobs(struct pd_session* s) {
 }
 
 // The PC's moves, between frames. The app's messages (BoxesScreen.kt).
+// The summary's SWITCH (the app's swapPartySlots): two party records traded whole, as the game's party menu does it,
+// read back and put back if the write didn't take. On the field only, between frames.
+// --- TRADE EVOS (TradeEvolution.kt): GetEvolutionTargetSpecies(mon, EVO_MODE_TRADE, 0) says what a party Pokémon
+// becomes by trading; EVOLVE runs the game's own BeginEvolutionScene with gCB2_AfterEvolution = CB2_ReturnToField, the
+// field's controls locked first, as trade.c does after a link trade. Asked on each slot with its 100 bytes put back (a
+// held-item evolution's item stays). ---
+
+#define TRADE_MON_SIZE 100
+#define EVO_MODE_TRADE 1
+
+static bool trade_evo_check(const struct pd_session* s) {
+    const struct pd_config* cfg = s->game.cfg;
+    if (!cfg || !cfg->tradeEvoTarget || !cfg->playerParty || !s->rom) return false;
+    const uint32_t fns[4] = { cfg->tradeEvoTarget, cfg->tradeEvoScene, cfg->tradeEvoReturn, cfg->tradeEvoLock };
+    for (int i = 0; i < 4; i++) {
+        uint32_t o = (fns[i] & ~1u) - 0x08000000u;
+        if (fns[i] < 0x08000000u || o + 32 > s->romSize || pd_crc32(s->rom + o, 32) != cfg->tradeEvoCrcs[i]) return false;
+    }
+    return true;
+}
+
+static uint32_t game_call(struct pd_session* s, uint32_t fn, uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, bool* ok) {
+    const uint32_t args[4] = { a0, a1, a2, a3 };
+    uint32_t r0 = 0;
+    if (!pk_call(s->core, fn, args, &r0)) *ok = false;
+    return r0;
+}
+
+static bool trade_evo_field(const struct pd_session* s) {
+    return !s->shown.inBattle && !(s->fieldFlags & (PK_FIELD_BATTLE | PK_FIELD_LOCKED)) && (s->fieldFlags & PK_FIELD_KNOWN) &&
+           (!s->wideKnown || pk_wide_scene() == PK_WIDE_SCENE_FIELD);
+}
+
+// What each party slot would become, while the summary's up (every half second).
+static void trade_evo_targets(struct pd_session* s) {
+    bool want = s->tradeEvoOk && s->settings->tradeEvos && s->ui.tab == PD_TAB_PARTY && s->ui.summarySlot >= 0;
+    if (!want) {
+        memset(s->host.evolveTo, 0, sizeof(s->host.evolveTo));
+        return;
+    }
+    if (s->frame % 30 || !trade_evo_field(s) || !pk_call_safe(s->core)) return;
+    const struct pd_config* cfg = s->game.cfg;
+    int before[6];
+    memcpy(before, s->host.evolveTo, sizeof(before));
+    for (int i = 0; i < 6; i++) {
+        s->host.evolveTo[i] = 0;
+        if (i >= s->shown.partyCount || s->shown.party[i].egg || !s->shown.party[i].species) continue;
+        uint32_t mon = cfg->playerParty + (uint32_t) (i * TRADE_MON_SIZE);
+        uint8_t saved[TRADE_MON_SIZE];
+        if (!pd_session_read(s, mon, saved, sizeof(saved))) continue;
+        bool ok = true;
+        uint32_t target = game_call(s, cfg->tradeEvoTarget, mon, EVO_MODE_TRADE, 0, 0, &ok) & 0xFFFF;
+        pd_session_write(s, mon, saved, sizeof(saved));
+        if (ok) s->host.evolveTo[i] = (int) target;
+    }
+    if (memcmp(before, s->host.evolveTo, sizeof(before))) s->redraw = true;
+}
+
+static void trade_evo_jobs(struct pd_session* s) {
+    trade_evo_targets(s);
+    if (!s->evolveAsk || !pk_call_safe(s->core)) return;
+    s->evolveAsk = false;
+    const struct pd_config* cfg = s->game.cfg;
+    const int slot = s->ui.summarySlot;
+    if (!s->tradeEvoOk || slot < 0 || slot >= s->shown.partyCount) return;
+    if (!trade_evo_field(s)) {
+        pd_session_show(s, "Not now: close the game's menus first");
+        return;
+    }
+    uint32_t mon = cfg->playerParty + (uint32_t) (slot * TRADE_MON_SIZE);
+    bool ok = true;
+    // The real thing from here: a held-item evolution's item is used up, as in a trade.
+    uint32_t target = game_call(s, cfg->tradeEvoTarget, mon, EVO_MODE_TRADE, 0, 0, &ok) & 0xFFFF;
+    if (!ok || !target) {
+        pd_session_show(s, ok ? "It doesn't evolve by trading now" : "Couldn't evolve it");
+        return;
+    }
+    uint32_t back = cfg->tradeEvoReturn | 1u;
+    uint8_t word[4] = { (uint8_t) back, (uint8_t) (back >> 8), (uint8_t) (back >> 16), (uint8_t) (back >> 24) };
+    if (!pd_session_write(s, cfg->tradeEvoAfter, word, 4)) {
+        pd_session_show(s, "Couldn't evolve it");
+        return;
+    }
+    game_call(s, cfg->tradeEvoLock, 0, 0, 0, 0, &ok);
+    game_call(s, cfg->tradeEvoScene, mon, target, 0, (uint32_t) slot, &ok);
+    // The evolution plays on the game's screen; the companion goes back to the party.
+    s->ui.summarySlot = -1;
+    memset(s->host.evolveTo, 0, sizeof(s->host.evolveTo));
+    s->redraw = true;
+}
+
+static void swap_jobs(struct pd_session* s) {
+    if (!s->swapAsk || !pk_call_safe(s->core)) return;
+    s->swapAsk = false;
+    struct pd_ui* ui = &s->ui;
+    const struct pd_config* cfg = s->game.cfg;
+    const int a = ui->switchFrom, b = ui->switchTo, count = s->shown.partyCount;
+    bool battle = s->shown.inBattle || (s->fieldFlags & PK_FIELD_BATTLE);
+    if (battle) { pd_session_show(s, "Not in a battle"); return; }
+    if ((s->fieldFlags & PK_FIELD_LOCKED) || (s->wideKnown && pk_wide_scene() != PK_WIDE_SCENE_FIELD)) {
+        pd_session_show(s, "Not now");
+        return;
+    }
+    const int stride = cfg && cfg->partyLayout ? cfg->partyLayout->size : pd_party_layout_vanilla.size;
+    uint8_t first[128], second[128], check[128];
+    if (!cfg || !cfg->playerParty || a == b || a < 0 || b < 0 || a >= count || b >= count || stride <= 0 || stride > 128) {
+        pd_session_show(s, "Couldn't switch");
+        return;
+    }
+    const uint32_t atA = cfg->playerParty + (uint32_t) (a * stride), atB = cfg->playerParty + (uint32_t) (b * stride);
+    bool ok = pd_session_read(s, atA, first, (size_t) stride) && pd_session_read(s, atB, second, (size_t) stride) &&
+              pd_session_write(s, atA, second, (size_t) stride) && pd_session_write(s, atB, first, (size_t) stride) &&
+              pd_session_read(s, atA, check, (size_t) stride) && !memcmp(check, second, (size_t) stride) &&
+              pd_session_read(s, atB, check, (size_t) stride) && !memcmp(check, first, (size_t) stride);
+    if (!ok) {
+        pd_session_write(s, atA, first, (size_t) stride);
+        pd_session_write(s, atB, second, (size_t) stride);
+        pd_session_show(s, "Couldn't switch");
+        return;
+    }
+    ui->summarySlot = b; // the summary follows its Pokemon to its new place
+    s->redraw = true;
+}
+
 static void box_jobs(struct pd_session* s) {
     if (!s->boxAsk || !pk_call_safe(s->core)) return;
     int ask = s->boxAsk;
@@ -1002,7 +1745,16 @@ static void overlay_update(struct pd_session* s) {
     pd_canvas_init(&c, PD_TOP_W, PD_TOP_H, overlayPx);
     bool field = on_field(s);
     s->hudFieldFrames = field ? s->hudFieldFrames + 1 : 0;
-    bool hud = !s->quickOpen && s->settings->hud && s->game.cfg && s->hudFieldFrames >= HUD_AFTER_FRAMES;
+    // FREE FLIGHT locks the field's controls: the HUD keeps its map up there (the rest waits for the landing).
+    bool flying = !field && s->flightState != PK_FLIGHT_IDLE && !(s->settings->hudHidden & 1 << PD_HUD_MAP);
+    struct pd_settings flySettings;
+    const struct pd_settings* hudSettings = s->settings;
+    if (flying) {
+        flySettings = *s->settings;
+        flySettings.hudHidden = ~(1 << PD_HUD_MAP);
+        hudSettings = &flySettings;
+    }
+    bool hud = !s->quickOpen && s->settings->hud && s->game.cfg && (s->hudFieldFrames >= HUD_AFTER_FRAMES || flying);
     if (hud) {
         int steps = repel_steps(s->core, s->game.cfg);
         if (steps <= 0) s->hud.repelFull = 0;
@@ -1031,7 +1783,7 @@ static void overlay_update(struct pd_session* s) {
         key ^= (uint32_t) ((s->flyList ? s->flySel + 100 : 0) + (s->repelList ? s->repelSel + 200 : 0)) * 40503u;
         for (int i = 0; i < s->quickCount; i++) key = key * 31 + (uint32_t) (s->quick[i].why != NULL) + (uint32_t) s->quick[i].off * 2;
     } else if (hud) {
-        key ^= hud_key(&s->game, &s->shown, &s->hud, s->settings);
+        key ^= hud_key(&s->game, &s->shown, &s->hud, hudSettings) ^ (flying ? 0x5A5Au : 0);
     }
     key = key * 31 + (uint32_t) picture;
     if (s->ui.keyFocus) key = key * 31 + 0x9E37u + (uint32_t) (bob * 16 + s->stripeIn);
@@ -1042,23 +1794,31 @@ static void overlay_update(struct pd_session* s) {
     s->overlayDim = s->quickOpen;
     overlay_clear();
     s->overlayShown = false;
+    // The HUD and the QUICK MENU are drawn in the app's own font in every game, as the app's are (outside the companion, a
+    // Game Boy game's letters on the see-through glass came out heavy).
+    const struct pd_glyph* gameFont;
+    int gameFontCount;
+    pd_font_get(&gameFont, &gameFontCount);
+    pd_font_set(NULL, 0);
+    pd_font_size_set(1);
     if (s->quickOpen) {
-        if (s->flyList) quick_list_draw(&c, "FLY", s->flyNames, s->flyTargets.count, s->flySel);
-        else if (s->repelList) quick_list_draw(&c, "REPEL", s->repelNames, s->repelKindCount, s->repelSel);
-        else quick_draw(&c, &s->game, s->quick, s->quickCount, s->quickSel);
+        if (s->flyList) quick_list_draw(&c, "FLY", s->flyNames, s->flyTargets.count, s->flySel, s->settings->hudLook);
+        else if (s->repelList) quick_list_draw(&c, "REPEL", s->repelNames, s->repelKindCount, s->repelSel, s->settings->hudLook);
+        else quick_draw(&c, &s->game, s->quick, s->quickCount, s->quickSel, s->settings->hudLook);
         s->overlayShown = true;
     } else if (hud) {
         s->hud.compact = s->hud.noButtons = true;
         s->hud.wild = s->hud.focus = -1;
         s->hud.left = (PD_TOP_W - picture) / 2;
         s->hud.right = s->hud.left + picture;
-        s->overlayShown = hud_draw(&c, &s->game, &s->shown, &s->hud, s->settings, NULL);
+        s->overlayShown = hud_draw(&c, &s->game, &s->shown, &s->hud, hudSettings, NULL);
         // The buttons on the companion: the HUD fades back (hudAlpha 0.25).
         for (int i = 0; s->ui.keyFocus && i < PD_TOP_W * PD_TOP_H; i++) {
             uint32_t p = overlayPx[i], a = p >> 24 ? p >> 24 : 0xFF;
             if (p != QUICK_CLEAR) overlayPx[i] = (a / 4 ? a / 4 : 1) << 24 | (p & 0xFFFFFF);
         }
     }
+    pd_font_set(gameFont, gameFontCount);
     if (s->ui.keyFocus) {
         int left = (PD_TOP_W - picture) / 2, bottom = (PD_TOP_H + pictureH) / 2;
         focus_stripe(&c, left, left + picture, bottom, pictureH, gameRows, bob, s->stripeIn);
@@ -1076,6 +1836,7 @@ static void overlay_update(struct pd_session* s) {
 
 void pd_session_tick(struct pd_session* s, const struct pd_input* in, unsigned ms) {
     quick_items(s);
+    bool menuWasOpen = s->quickOpen;
     if (in->quickMenu) {
         s->quickOpen = !s->quickOpen;
         s->flyList = s->repelList = s->flyFromMap = false;
@@ -1090,17 +1851,32 @@ void pd_session_tick(struct pd_session* s, const struct pd_input* in, unsigned m
         s->host.ffOn = ff;
         s->redraw = true;
     }
-    uint32_t keys = s->quickOpen ? 0 : in->held;
+    // A button held while the menu was up (the A that picked a tile closes it this very loop) stays the menu's until
+    // it's let go: else the game gets it too, and talks to the water or the person in front.
+    if (menuWasOpen || s->quickOpen) s->quickHeld |= in->held;
+    s->quickHeld &= in->held;
+    uint32_t keys = s->quickOpen ? 0 : in->held & ~s->quickHeld;
     // A loop is one screen refresh, so a speed is frames a refresh: 1.5x runs one, two, one, two; 0.5x every other.
     static const int SPEED_X4[PD_GAME_SPEED_COUNT] = { 4, 6, 8, 12, 16, 2, 1 };
-    int quarter = ff && !smart_slows(s) ? s->settings->ffSpeed * 4 : SPEED_X4[s->settings->gameSpeed];
+    // SCENE SPEEDS: a scene's own pick (SAME = GAME SPEED's) while FF is off: 1x, 1.5x, 2x, 3x, 4x.
+    static const int SCENE_X4[PD_SCENE_SPEED_COUNT] = { 0, 4, 6, 8, 12, 16 };
+    int scene = ff ? -1 : scene_now(s), pick = scene >= 0 ? s->settings->sceneSpeed[scene] : 0;
+    int quarter = ff && !smart_slows(s) ? s->settings->ffSpeed * 4 : pick > 0 ? SCENE_X4[pick] : SPEED_X4[s->settings->gameSpeed];
+    // The scenic FLY's trip runs at 2x at least (EmulatorEngine.SCENIC_SPEED): a show, nothing to steer.
+    if (s->scenic && s->flightState != PK_FLIGHT_IDLE && s->flightState != PK_FLIGHT_DISMOUNT && quarter < 8) quarter = 8;
     s->speedDebt += quarter;
     int count = s->speedDebt / 4;
     s->speedDebt %= 4;
+    if (count == 1 && quarter == 4 && in->catchUp > 0) {
+        count += in->catchUp;
+        s->catchUpFrames += (unsigned) in->catchUp;
+    }
     for (int i = 0; i < count; i++) pd_session_run_frame(s, keys, i == count - 1);
     field_jobs(s);
     item_jobs(s);
     box_jobs(s);
+    swap_jobs(s);
+    trade_evo_jobs(s);
     if (s->noticeFrames > 0) s->noticeFrames--;
     // Off the field (a battle, the PC opened from the companion) the buttons are the game's again.
     if (s->ui.keyFocus && !pd_session_can_focus(s)) pd_session_set_focus(s, false);
@@ -1114,6 +1890,13 @@ void pd_session_tick(struct pd_session* s, const struct pd_input* in, unsigned m
 }
 
 void pd_session_draw(struct pd_session* s, struct pd_canvas* bottom) {
+    // The 3DS draws the small pixel font only (TEXT SIZE's NORMAL is gone, the user's call 2026-11-15); other hosts
+    // (the Linux cores) never set it and keep Pixel Operator.
+    pd_font_size_set(1);
+    if (!s->uiWarm && s->game.cfg) {
+        pd_ui_warm(&s->ui, bottom, &s->game);
+        s->uiWarm = true;
+    }
     pd_ui_draw(&s->ui, bottom, &s->game, &s->shown, &s->host);
     s->redraw = false;
 }
@@ -1121,9 +1904,14 @@ void pd_session_draw(struct pd_session* s, struct pd_canvas* bottom) {
 bool pd_session_action(struct pd_session* s, enum pd_action action) {
     switch (action) {
     case PD_ACTION_SETTINGS_CHANGED:
+        if (s->settings->aspect == PD_ASPECT_ZOOM_OUT && s->lastAspect != PD_ASPECT_ZOOM_OUT)
+            pd_session_show(s, "EXPAND 1x is experimental: it may not run smoothly");
+        s->lastAspect = s->settings->aspect;
+        options_sync(s);
         pd_look_apply(&s->game, s->settings);
         cheats_update(s);
         s->redraw = true;
+        s->overlayDirty = true;
         return false; // the host saves them
     case PD_ACTION_ITEM_PICK: s->itemAsk = 1; return true;
     case PD_ACTION_ITEM_APPLY: s->itemAsk = 2; return true;
@@ -1139,14 +1927,32 @@ bool pd_session_action(struct pd_session* s, enum pd_action action) {
     case PD_ACTION_BOX_WITHDRAW: case PD_ACTION_BOX_SWAP: case PD_ACTION_BOX_DEPOSIT:
         s->boxAsk = (int) action;
         return true;
+    case PD_ACTION_PARTY_SWAP:
+        s->swapAsk = true;
+        return true;
+    case PD_ACTION_TRADE_EVOLVE:
+        s->evolveAsk = true;
+        return true;
+    case PD_ACTION_NUZLOCKE_TOGGLE:
+        if (s->nuzSupported) {
+            s->nuzOn = !s->nuzOn;
+            s->host.nuzlockeOn = s->nuzOn;
+            nuz_save(s);
+            s->redraw = true;
+        }
+        return true;
+    case PD_ACTION_NUZLOCKE_EDIT:
+        nuz_edit(s);
+        return true;
     case PD_ACTION_FLY_ASK:
         s->flyFromMap = true;
         s->flyAsk = 1;
         return true;
     case PD_ACTION_FLY_TO:
-        s->flyMapsec = s->flyTargets.towns[s->ui.flyPick];
-        s->flyStage = 1;
-        s->flyWait = 0;
+        fly_to(s, s->flyTargets.towns[s->ui.flyPick]);
+        return true;
+    case PD_ACTION_FLIGHT:
+        s->flightAsk = 1;
         return true;
     case PD_ACTION_STATE_SLOT:
         s->host.slotSelected = s->ui.actionSlot;

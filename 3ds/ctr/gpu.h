@@ -12,12 +12,16 @@
 
 bool gpu_init(void);
 void gpu_exit(void);
+// The core the draw thread runs on (3 or 2 on a New 3DS, 1 on an Old one), -1 = none: the game's core draws.
+int gpu_draw_core(void);
 
 // mGBA's video buffer: 32-bit pixels (0xXXBBGGRR), GPU_GAME_STRIDE x 160, in linear memory.
 uint32_t* gpu_game_buffer(void);
 // Two buffers in turn, so the draw thread reads a frame where it lies while the next one is drawn. Only for a GBA game:
 // its renderer redraws every line of a new buffer, a Game Boy's leaves a blank screen's alone. No draw thread: one.
 void gpu_double_game(bool on);
+// The colour beside the game's picture (0 = black): a Game Boy game's is white.
+void gpu_set_bars(uint32_t rgb);
 // A frame is whole and is what's shown next; the buffer the next one goes in.
 uint32_t* gpu_frame_done(void);
 // The core's picture size: 240 x 160, a Game Boy's 160 x 144.

@@ -169,10 +169,17 @@ private fun flySections(fly: FlyFns, g: GameCalls): List<Int> {
     }.map { fly.firstMapsec + it } + fly.extraMapsecs
 }
 
+/** The map sections FLY could ever offer (visited or not): FLIGHT AREA's towns ([FlightArea]). */
+fun flyTownSections(fly: FlyFns, g: GameCalls): List<Int> = flySections(fly, g)
+
+/** The towns the game's own Fly map would list now ([FlyFns.flyTypes]), with no party or badge gate: FLIGHT AREA's start. */
+fun flyVisitedTowns(fly: FlyFns, g: GameCalls): List<Int> =
+    flySections(fly, g).filter { g.call(fly.getMapsecType, it).toInt() in fly.flyTypes }
+
 /** Whether the running ROM has [fly]'s functions where they're expected. */
 fun flyCodeMatches(fly: FlyFns, read: (addr: Long, len: Int) -> ByteArray): Boolean =
     fly.functions.zip(fly.codeCrcs).all { (fn, crc) ->
-        val got = java.util.zip.CRC32().apply { update(read(fn, 32)) }.value
+        val got = crc32(read(fn, 32))
         got == crc || fn == fly.getMapsecType && got == fly.getMapsecTypeAltCrc
     }
 
@@ -188,6 +195,8 @@ enum class FlyResult {
     PARTNER,
     /** Nobody in the party knows Fly (any more). */
     NO_FLYER,
+    /** No way over the map to the town, in a game without the classic FLY ([FieldItemFns.classicFly]). */
+    NO_ROUTE,
     FAILED,
 }
 
@@ -201,18 +210,22 @@ data class FlyTargets(
 
 private const val GET_MON_PERSONALITY = 0
 
-/** The first party Pokémon that knows Fly (not an egg): its slot and personality, or null. */
+/** The first party Pokémon that knows Fly (not an egg): its slot and personality, or null. With NO HMS NEEDED
+ * ([HmFree.active]) the first that isn't an egg, if nobody knows it: the game's own Fly checks no move after the menu. */
 private fun flyer(fns: FieldItemFns, fly: FlyFns, g: GameCalls): Pair<Int, Long>? {
     val p = fns.party ?: return null
     val count = (g.read(p.partyCount, 1)[0].toInt() and 0xFF).coerceAtMost(6)
+    var first: Int? = null
     for (slot in 0 until count) {
         val mon = (p.party + slot * p.monStride).toInt()
         if (g.call(p.getMonData, mon, fly.monEggField) != 0L) continue
+        if (first == null) first = slot
         if ((0 until 4).any { g.call(p.getMonData, mon, fly.monMoveField + it) == fly.flyMove.toLong() }) {
             return slot to g.call(p.getMonData, mon, GET_MON_PERSONALITY)
         }
     }
-    return null
+    val slot = first?.takeIf { HmFree.active } ?: return null
+    return slot to g.call(p.getMonData, (p.party + slot * p.monStride).toInt(), GET_MON_PERSONALITY)
 }
 
 /** Why FLY can't start now, or null: the party menu's own checks, in its order. */
@@ -227,6 +240,16 @@ private fun flyGate(fns: FieldItemFns, fly: FlyFns, busy: Boolean, g: GameCalls)
 private fun mayFlyHere(fly: FlyFns, g: GameCalls): Long =
     if (fly.mapHeader != 0L) g.call(fly.setUpFieldMoveFly, g.read(fly.mapHeader + 0x17, 1)[0].toInt() and 0xFF)
     else g.call(fly.setUpFieldMoveFly)
+
+/** FREE FLIGHT's checks (Flight.kt): FLY's own - the field free, the badge, a map FLY may leave from - and a Pokémon
+ * that knows Fly. OK, or why not. Emu thread. */
+fun flightCheck(fns: FieldItemFns, busy: Boolean, g: GameCalls): FlyResult {
+    val fly = fns.fly ?: return FlyResult.FAILED
+    return runCatching {
+        flyGate(fns, fly, busy, g)?.let { return it }
+        if (flyer(fns, fly, g) == null) FlyResult.NO_FLYER else FlyResult.OK
+    }.getOrElse { FlyResult.FAILED }
+}
 
 /** FLY's destinations right now (the Fly map's visited towns) and its Pokémon. Emu thread. */
 fun flyTargets(fns: FieldItemFns, busy: Boolean, g: GameCalls): FlyTargets {

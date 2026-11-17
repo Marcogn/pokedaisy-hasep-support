@@ -188,6 +188,9 @@ fun hasepFieldItems(s: HasepSymbols, read: (Long, Int) -> ByteArray): FieldItemF
         party = party,
         pc = pc,
         fly = fly,
+        // Heart and Soul's FREE FLIGHT / scenic FLY (PokeDaisy 1.6.0) is at 2.0.6's fixed addresses, which Hasep moves:
+        // none until the table carries pk_flight's functions. FLY stays the game's own warp.
+        flight = null,
     )
 }
 

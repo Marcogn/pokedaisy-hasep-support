@@ -62,6 +62,21 @@ interface CompanionSettings {
     fun setWildEncounters(percent: Int) {}
     val wildEncountersSupported: Boolean get() = false
 
+    /** FLY STYLE - see [com.pokedaisy.app.Prefs.flyStyleId]; [flyStyleSupported]: this game has FREE FLIGHT (Flight.kt). */
+    val flyStyle: FlyStyle get() = FlyStyle.CLASSIC
+    fun setFlyStyle(style: FlyStyle) {}
+    val flyStyleSupported: Boolean get() = false
+    /** FLIGHT AREA (where [flyStyleSupported]) - see [com.pokedaisy.app.Prefs.flightAreaId]. */
+    val flightArea: FlightAreaMode get() = FlightAreaMode.SEEN
+    fun setFlightArea(mode: FlightAreaMode) {}
+    /** MAKEOVER > FLY ON (where [flyStyleSupported]): the bird, or a vehicle with the player in it. */
+    val flightVehicle: com.pokedaisy.app.companion.data.FlightVehicle get() = com.pokedaisy.app.companion.data.FlightVehicle.BIRD
+    fun setFlightVehicle(v: com.pokedaisy.app.companion.data.FlightVehicle) {}
+    /** The first scenic FLY's question (ui.FlyStyleAsk) answered: CLASSIC switches, SCENIC / null (it timed out) keeps it. */
+    fun answerFlyStyle(style: FlyStyle?) {}
+    /** BOSS RETRY's card answered: true = back to the lost battle's start ([com.pokedaisy.app.companion.ui.BattleRetryAsk]). */
+    fun answerBattleRetry(retry: Boolean) {}
+
     /** REUSABLE TMS - see [com.pokedaisy.app.Prefs.reusableTms]; [reusableTmsSupported]: the ROM's code that uses a TM
      * up is known ([com.pokedaisy.app.companion.data.ReusableTms]). */
     val reusableTms: Boolean get() = false
@@ -69,6 +84,46 @@ interface CompanionSettings {
     val reusableTmsSupported: Boolean get() = false
     /** The game's own TMs never run out ([com.pokedaisy.app.companion.data.ReusableTms.BUILT_IN]): the row says so. */
     val reusableTmsBuiltIn: Boolean get() = false
+    /** EXP SHARE - see [com.pokedaisy.app.Prefs.expShare]; [expShareSupported]: the game's getexp is known
+     * ([com.pokedaisy.app.companion.data.ExpShare]). */
+    val expShare: com.pokedaisy.app.companion.data.ExpShare.Mode get() = com.pokedaisy.app.companion.data.ExpShare.Mode.OFF
+    fun setExpShare(mode: com.pokedaisy.app.companion.data.ExpShare.Mode) {}
+    val expShareSupported: Boolean get() = false
+    /** LEVEL CAP - see [com.pokedaisy.app.Prefs.levelCap]; [levelCapSupported]: the game's getexp is known
+     * ([com.pokedaisy.app.companion.data.LevelCap]); [levelCapLevel]: the cap now (null = none worked out yet, or no
+     * boss left). */
+    val levelCap: Boolean get() = false
+    fun setLevelCap(on: Boolean) {}
+    val levelCapSupported: Boolean get() = false
+    val levelCapLevel: Int? get() = null
+    /** BOSS RETRY - see [com.pokedaisy.app.Prefs.battleRetry]. */
+    val battleRetry: Boolean get() = false
+    fun setBattleRetry(on: Boolean) {}
+    /** SHINY ALERT - see [com.pokedaisy.app.Prefs.shinyAlert]; [shinyHuntCount]: this game's wild battles since the last
+     * shiny (or since it was turned on). */
+    val shinyAlert: Boolean get() = false
+    fun setShinyAlert(on: Boolean) {}
+    val shinyHuntCount: Int get() = 0
+    /** Battles read a foe's shininess here (the games SHINY ODDS works in). */
+    val shinyAlertSupported: Boolean get() = false
+    /** LOW HP BEEP / FIELD POISON - see [com.pokedaisy.app.Prefs.lowHpBeep]; supported = the ROM's code is known
+     * ([com.pokedaisy.app.companion.data.QuietPatches]). */
+    val lowHpBeep: Boolean get() = true
+    fun setLowHpBeep(on: Boolean) {}
+    val lowHpBeepSupported: Boolean get() = false
+    val fieldPoison: Boolean get() = true
+    fun setFieldPoison(on: Boolean) {}
+    val fieldPoisonSupported: Boolean get() = false
+    /** AUTO REFILL - see [com.pokedaisy.app.Prefs.repelRefill]; [repelRefillSupported]: the game can take a REPEL from the
+     * companion (the quick menu's REPEL). */
+    val repelRefill: Boolean get() = false
+    fun setRepelRefill(on: Boolean) {}
+    val repelRefillSupported: Boolean get() = false
+    /** NO HMS NEEDED - see [com.pokedaisy.app.Prefs.hmFree]; [hmFreeSupported]: the ROM's field move check is known
+     * ([com.pokedaisy.app.companion.data.HmFree]). */
+    val hmFree: Boolean get() = false
+    fun setHmFree(on: Boolean) {}
+    val hmFreeSupported: Boolean get() = false
     /** INSTANT TEXT - see [com.pokedaisy.app.Prefs.instantText]; [instantTextSupported]: the ROM's text code is known
      * ([com.pokedaisy.app.companion.data.InstantText]). */
     val instantText: Boolean get() = false
@@ -87,9 +142,19 @@ interface CompanionSettings {
     val dsGpuAvailable: Boolean get() = true
     fun setDsResolution(scale: Int) {}
 
+    /** DS CORE ([com.pokedaisy.app.Prefs.dsCore]): null when the game isn't a DS one (no row); taken at the game's next
+     * start. [dsMelonDs]: the game runs on melonDS - on DSperate DS RESOLUTION and DS CPU BOOST are greyed out. */
+    val dsCore: DsCore? get() = null
+    fun setDsCore(core: DsCore) {}
+    val dsMelonDs: Boolean get() = true
+
     /** DS CPU BOOST ([com.pokedaisy.app.Prefs.dsCpuBoost]): null when the game isn't a DS one (no row). */
     val dsCpuBoost: Boolean? get() = null
     fun setDsCpuBoost(on: Boolean) {}
+
+    /** DS TOUCH SCREEN ([com.pokedaisy.app.Prefs.dsTouchFill]): null when there's no row (not a DS game on two screens). */
+    val dsTouchFill: Boolean? get() = null
+    fun setDsTouchFill(on: Boolean) {}
 
     /** DS LAYOUT ([com.pokedaisy.app.Prefs.dsLayout]): null when there's no row (not a DS game, or one on two screens). */
     val dsLayout: DsLayout? get() = null
@@ -118,6 +183,9 @@ interface CompanionSettings {
     fun setPlayerLook(look: String?) {}
     /** A PLAYER LOOK pick's name as the row and its tile show it (a hero's, or a Pokémon's in the game). */
     fun playerLookLabel(name: String): String = com.pokedaisy.app.companion.data.LookChar.byName(name)?.label ?: name
+    /** MAKEOVER > RIDE ON (where [playerLookSupported]): the game's bike, or one of our vehicles in its place. */
+    val rideVehicle: com.pokedaisy.app.companion.data.RideVehicle get() = com.pokedaisy.app.companion.data.RideVehicle.BIKE
+    fun setRideVehicle(v: com.pokedaisy.app.companion.data.RideVehicle) {}
     /** RIVAL LOOK: the rival of the other gender ([rivalLookSupported]: Emerald, Ruby, Sapphire) dressed up with the player. */
     val rivalLookSupported: Boolean get() = false
     val rivalLook: Boolean get() = true
@@ -190,6 +258,12 @@ interface CompanionSettings {
     /** Leaves TURBO A / B and the GBA / Game Boy rows unbound ([GbaControls.Btn.canClear]). */
     fun clearGbaControlBinding(btn: GbaControls.Btn) {}
 
+    /** GAME BUTTONS' RESET TO DEFAULTS ([GbaControls.resetBindings]). */
+    fun resetGbaControls() {}
+
+    /** HOTKEYS' RESET TO DEFAULTS ([com.pokedaisy.app.Hotkeys.resetBindings]). */
+    fun resetHotkeys() {}
+
     /** GAME BUTTONS' rows for the game running besides every game's ([GbaControls.Group.DS] or [GbaControls.Group.GBA]);
      * null = both groups (previews). */
     val buttonGroup: GbaControls.Group? get() = null
@@ -236,6 +310,13 @@ interface CompanionSettings {
     /** SETTINGS > DISCORD: opens PokeDaisy's Discord server ([Discord.URL]) in the browser or the Discord app. */
     fun openDiscord() {}
 
+    /** The running game is one its makers asked PokéDaisy not to read ([com.pokedaisy.app.companion.data.BlockedGames]):
+     * SETTINGS shows the emulator's rows only. */
+    val gameBlocked: Boolean get() = false
+
+    /** Opens a web link ([url]) in the browser - a blocked game's button ([com.pokedaisy.app.companion.data.BlockedAction]). */
+    fun openUrl(url: String) {}
+
     /** Whether battle-only strategic hints (move effectiveness chips, foe
      * Weak-to/Resists/Immune-to) are shown — see [Prefs.showHints]. */
     val showHints: Boolean
@@ -247,6 +328,8 @@ interface CompanionSettings {
 
     /** Saves DARK MODE (an ordinal of DarkModeSetting, see [Prefs.darkMode]); the look itself is DarkMode's state. */
     fun setDarkMode(v: Int) {}
+    /** SETTINGS > FONT (Prefs.appFont, an AppFont ordinal); the look itself is AppFonts' state. */
+    fun setAppFont(v: Int) {}
 
     /** Saves THEME (a ThemeSpec.id, see [Prefs.appTheme]; ui.theme.pickTheme); the screen puts the theme on itself. */
     fun setAppTheme(id: Int) {}
@@ -262,7 +345,17 @@ interface CompanionSettings {
     /** BATTLE VIEW - see [com.pokedaisy.app.Prefs.battleInfoFirst]. */
     val battleInfoFirst: Boolean get() = false
     fun setBattleInfoFirst(on: Boolean) {}
+    /** BATTLE VIEW > SUGGESTIONS - see [com.pokedaisy.app.Prefs.battleSuggestionsFirst]. */
+    val battleSuggestionsFirst: Boolean get() = false
+    fun setBattleSuggestionsFirst(on: Boolean) {}
 
+    /** CHALLENGE ICONS - see [com.pokedaisy.app.Prefs.raIcons]. */
+    val raIcons: Boolean get() = true
+    fun setRaIcons(on: Boolean) {}
+
+    /** LAST BALL - see [com.pokedaisy.app.Prefs.lastBallButton]. */
+    val lastBallButton: Boolean get() = true
+    fun setLastBallButton(on: Boolean) {}
     /** ONE-TAP MOVES - see [Prefs.oneTapMoves]. */
     val oneTapMoves: Boolean get() = false
     fun setOneTapMoves(on: Boolean) {}
@@ -302,6 +395,11 @@ interface CompanionSettings {
     val fieldHud: Boolean get() = true
     fun setFieldHud(on: Boolean) {}
 
+    /** SETTINGS > HIDE BATTLE MENU: two screens, the game's own battle menus off its screen - see
+     * [com.pokedaisy.app.Prefs.hideBattleMenu]. Null = no row (one screen, or a game it doesn't work in). */
+    val hideBattleMenu: Boolean? get() = null
+    fun setHideBattleMenu(on: Boolean) {}
+
     /** SETTINGS > BATTLE BUTTONS: one screen, FIGHT, POKéMON and RUN beside a battle - see [Prefs.battleButtons]. */
     val battleButtons: Boolean get() = true
     fun setBattleButtons(on: Boolean) {}
@@ -331,6 +429,14 @@ interface CompanionSettings {
     /** FPS / CPU over the game's corner - see [Prefs.showPerformance]. */
     val showPerformance: Boolean get() = false
     fun setShowPerformance(on: Boolean) {}
+
+    /** RetroAchievements popups - see [Prefs.raPopups]. The top screen's Settings > RetroAchievements has the same
+     * switches; off also mutes the unlock fanfare. */
+    val raPopups: Boolean get() = true
+    fun setRaPopups(on: Boolean) {}
+    /** RetroAchievements PROGRESS popups only - see [Prefs.raProgressPopups]; [raPopups] off hides these too. */
+    val raProgressPopups: Boolean get() = true
+    fun setRaProgressPopups(on: Boolean) {}
 
     /** How the game sits on the top screen: 3:2, stretched or WIDE - see [Prefs.gameAspect]. */
     val gameAspect: GameAspect
@@ -606,6 +712,34 @@ enum class FfMusicMode(val label: String) {
 
     /** Silent. */
     OFF(tk("OFF")),
+}
+
+/** SETTINGS > FLIGHT AREA: where FREE FLIGHT and the scenic FLY may go (companion.data.FlightArea). [label] stays English. */
+enum class FlightAreaMode(val id: Int, val label: String) {
+    /** Only over maps the player has seen: the save's towns, the routes between them, maps with a beaten trainer, every map stood on. */
+    SEEN(0, tk("VISITED")),
+
+    /** Anywhere the game's world goes; RetroAchievements pause from the first take-off. */
+    ANYWHERE(1, tk("ANYWHERE")),
+    ;
+
+    companion object {
+        fun of(id: Int): FlightAreaMode = entries.firstOrNull { it.id == id } ?: SEEN
+    }
+}
+
+/** SETTINGS > FLY STYLE: how the companion's FLY (MAP, QUICK MENU) gets there. [label] stays English; the row translates it. */
+enum class FlyStyle(val id: Int, val label: String) {
+    /** The game's own cut-in, flight and landing. */
+    CLASSIC(0, tk("CLASSIC")),
+
+    /** Up on the bird and over the field to the town (companion.data.ScenicFly), the view zoomed out on EXPAND. */
+    SCENIC(1, tk("SCENIC")),
+    ;
+
+    companion object {
+        fun of(id: Int): FlyStyle = entries.firstOrNull { it.id == id } ?: CLASSIC
+    }
 }
 
 /** SETTINGS > BATTLE STYLE: the battle controls' look. [label] stays English; the rows translate it. */

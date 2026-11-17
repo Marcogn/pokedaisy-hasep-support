@@ -12,9 +12,11 @@
 // Where a tab's content starts: the tab bar is along the bottom, like the app's
 // (pd_ui_draw hands the tabs the canvas above it).
 #define CONTENT_Y MARGIN
-#define BAR_Y(c) ((c)->h - 30) // the tab bar: 28 tall, 2 above the edge
+// The tab bar: 28 tall (22 at TEXT SIZE SMALL, whose labels are smaller), 2 above the edge.
+#define TAB_BAR_H (pd_font_size_small() ? 22 : 28)
+#define BAR_Y(c) ((c)->h - TAB_BAR_H - 2)
 #define MARGIN 4
-#define ROW_H 18
+#define ROW_H pd_list_row(18)
 
 // Hit ids.
 // The game pd_ui_draw is drawing (its names and types for the widgets that aren't handed it).
@@ -55,6 +57,9 @@ enum {
     HIT_SUMMARY_PC = 6181,
     HIT_BOX_CONFIRM = 6182,
     HIT_BOX_CANCEL = 6183,
+    HIT_SUMMARY_SWITCH = 6184,
+    HIT_SWITCH_CANCEL = 6185,
+    HIT_SUMMARY_EVOLVE = 6186,
     HIT_YES = 800,
     HIT_NO = 801,
     HIT_SCRIM = 802,
@@ -63,11 +68,16 @@ enum {
     HIT_MAP_ME = 902,
     HIT_MAP_PLACES = 903,
     HIT_MAP_FLY = 904,
+    HIT_MAP_TAKE_OFF = 905,
     HIT_FLY_TOWN = 1300,   // + town
     HIT_PLACE = 1000,      // + PLACES row
     HIT_DEX_LIST = 1400,
     HIT_DEX_ROW = 30000,   // + national number (up to 2048)
     HIT_DEX_READ_ONLY = 33000, // + national number, focusable for scrolling
+    HIT_NUZ_ROW = 40000,   // + a NUZLOCKE row
+    HIT_NUZ_LIST = 40990,  // its list (a drag scrolls it)
+    HIT_NUZ_PICK = 40991,  // + 0..2: CAUGHT / MISSED / NOT USED
+    HIT_NUZ_ON = 40995,    // the TURN ON button
     HIT_DEX_TOGGLE = 1900,
     HIT_DEX_PREV = 1901,
     HIT_DEX_NEXT = 1902,
@@ -75,6 +85,9 @@ enum {
     HIT_DEX_PAGE = 1920,    // the section's page: a drag scrolls it
     HIT_DEX_FILTER = 1940, // + four filters
     HIT_DEX_CYCLE = 1944,
+    HIT_DEX_TYPE = 1945,   // the TYPE filter's row
+    HIT_DEX_NAME = 1946,   // the NAME filter's row
+    HIT_DEX_PICK = 1950,   // + a TYPE / NAME choice (ALL first)
     HIT_GUIDE_PAGE = 2000, // + page
     HIT_GUIDE_ROW = 2100,  // + entry
     HIT_GUIDE_LIST = 2900,
@@ -99,6 +112,8 @@ enum {
     HIT_STATE_UNDO_LOAD = 3073,
     HIT_OPEN_CARD = 3100,
     HIT_CARD = 3101,
+    HIT_SETTINGS_GROUP = 3110, // + SETTINGS' group tab (the rail)
+    HIT_FOE_DETAILS = 3120,    // INFO's expand / shrink
 };
 
 enum setting_row {
@@ -130,10 +145,25 @@ enum setting_row {
     SETTING_RUN_INDOORS,
     SETTING_HINTS,
     SETTING_ONE_TAP,
+    SETTING_BATTLE_STYLE,
+    SETTING_BATTLE_INFO,
+    SETTING_BATTLE_VIEW,
+    SETTING_FLY_STYLE,
+    SETTING_FLIGHT_AREA,
+    SETTING_FLY_ON,
     SETTING_RESTART,
+    SETTING_RESET,      // hosts with hasCoreRows: every setting back to its default, after a confirm
+    SETTING_VIEW,       // VIEW: SCREEN and ASPECT as one pick-list (the full SETTINGS)
+    SETTING_REUSABLE_TMS,
+    SETTING_INSTANT_TEXT,
+    SETTING_TRADE_EVOS,
+    SETTING_NUZLOCKE,
+    SETTING_SCENE,      // + enum pd_scene: SCENE SPEEDS' rows, each a pick-list
 };
 
 int ui_settings_follow(int scroll, int y, int height);
+// SETTINGS' rail: a tap on group [i]'s tab scrolls the list to it.
+void ui_settings_group(struct pd_ui* ui, int i);
 
 // The tabs TAB BAR offers, in the bar's order.
 #define UI_BAR_CHOICES 10
@@ -148,6 +178,11 @@ void ui_more_page(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g
 // An icon at `scale` canvas pixels a pixel.
 void ui_mono(struct pd_canvas* c, const struct pd_mono* icon, int x, int y, int scale, uint32_t color);
 void ui_art(struct pd_canvas* c, const struct pd_art* art, int x, int y, int scale);
+// TEXT SIZE SMALL's line between a list's rows (the bag's divider, on the grey lists): a pixel at [y], [w] wide. Nothing at NORMAL.
+void ui_row_divider(struct pd_canvas* c, int x, int y, int w);
+// An icon drawn [size] pixels square, smoothed: Scale2x (its edges kept), then averaged down to [size] and blended in.
+// One of [art] (its colours) or [mono] (in [color]); 32 x 32 at most.
+void ui_icon_smooth(struct pd_canvas* c, const struct pd_art* art, const struct pd_mono* mono, uint32_t color, int x, int y, int size);
 
 void ui_add_hit(struct pd_ui* ui, int x, int y, int w, int h, int id);
 void ui_add_scroll_hit(struct pd_ui* ui, int x, int y, int w, int h, int id);
@@ -161,6 +196,8 @@ void ui_status_badge(struct pd_canvas* c, int x, int y, uint32_t status);
 void ui_notice(struct pd_canvas* c, const char* title, const char* line1, const char* line2);
 // A LABEL  VALUE row, the value from ~42% across (OptionLine).
 void ui_row(struct pd_canvas* c, int x, int y, int w, const char* label, const char* value, bool selected);
+// ui_row with the value column at [valuePct] of the width (the app's labelWeight).
+void ui_row_split(struct pd_canvas* c, int x, int y, int w, const char* label, const char* value, bool selected, int valuePct);
 
 bool ui_summary_learn(struct pd_ui*);
 void ui_party_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, const struct pd_snapshot* s,
@@ -197,6 +234,11 @@ int ui_bar_count(const struct pd_ui* ui);
 void ui_places_overlay(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g);
 void ui_fly_overlay(struct pd_ui* ui, struct pd_canvas* c);
 void ui_guide_notice(struct pd_ui* ui, struct pd_canvas* c);
+void ui_dex_pick_overlay(struct pd_ui* ui, struct pd_canvas* c);
+// NUZLOCKE (pd_ui_nuzlocke.c): the tab, its pick / confirm, a tap on them.
+void ui_nuzlocke_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, const struct pd_host_info* host);
+void ui_nuzlocke_overlay(struct pd_ui* ui, struct pd_canvas* c);
+bool ui_nuzlocke_act(struct pd_ui* ui, int id);
 
 // A tap each tab's file handles; true if it was theirs.
 bool ui_map_act(struct pd_ui* ui, int id);
@@ -218,7 +260,25 @@ int ui_out_slots(const struct pd_snapshot* s);
 // PARTY's grid in the canvas; with [out] / [best] its picker: those slots tagged, tapping sends a Pokémon in.
 void ui_party_grid(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, const struct pd_snapshot* s, int best, int out);
 // A beveled colour button (PlatinumButton), id < 0 = not tappable.
+// What a move does to the foe, as a chip (MultiplierChip): returns its width (c NULL: just measures).
+int ui_mult_chip(struct pd_canvas* c, int x, int y, int pct);
+// BATTLE STYLE > GEN 5 (pd_ui_battle_gen5.c): the controls' pane, and the closed ball behind INFO / SUGGESTIONS.
+void ui_battle_gen5(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, const struct pd_snapshot* s, bool busy);
+void ui_gen5_closed_ball(struct pd_canvas* c);
+void ui_gen5_warm(struct pd_canvas* c);
+// The BATTLE tab's backdrop in GEN 5: the closed ball, or only the strip under the pane while the controls cover it.
+void ui_gen5_backdrop(struct pd_ui* ui, struct pd_canvas* c, const struct pd_snapshot* s);
+// Whether the BATTLE tab takes GEN 5's look for this game.
+bool ui_gen5_style(const struct pd_ui* ui, const struct pd_game* g);
+// BATTLE INFO on (INFO, SUGGESTIONS and the move ratings), and the ratings with BATTLE HINTS too.
+bool ui_battle_info_on(const struct pd_ui* ui);
+bool ui_battle_hints_on(const struct pd_ui* ui);
+// The battle's touch input is there for a single battle (whatever the game waits for now).
+bool ui_battle_input_on(const struct pd_ui* ui, const struct pd_snapshot* s);
 void ui_platinum(struct pd_ui* ui, struct pd_canvas* c, int x, int y, int w, int h, uint32_t fill, uint32_t frame, int id);
+// A PlatinumButton's label / back arrow, centred: white on its colour, the window's ink on a Game Boy game's plain box.
+void ui_platinum_label(struct pd_canvas* c, int x, int y, int w, int h, const char* text);
+void ui_platinum_back(struct pd_canvas* c, int x, int y, int w, int h);
 // Blends what was just drawn in a rectangle over [before] (w x h pixels saved first): alpha 0-255.
 void ui_fade_rect(struct pd_canvas* c, const uint32_t* before, int x, int y, int w, int h, int alpha);
 // A type's colour (AppColors.typeColors), and its badge: returns the width.
@@ -237,5 +297,7 @@ void ui_scroll_bar(struct pd_canvas* c, int x, int y, int h, int scroll, int tot
 // A list's bar to drag (SETTINGS): the rail in x, y, w, h, the thumb for scroll of total with view shown.
 #define SCROLL_BAR_W 8
 void ui_scroll_rail(struct pd_ui* ui, struct pd_canvas* c, int x, int y, int w, int h, int scroll, int total, int view);
+// A list's rail in the room its rows keep clear at their right edge ([right] = the list's inner right): dragged like SETTINGS'.
+void ui_list_rail(struct pd_ui* ui, struct pd_canvas* c, int right, int y, int h, int scroll, int total);
 
 #endif

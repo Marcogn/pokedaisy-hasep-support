@@ -66,36 +66,21 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.automirrored.filled.ViewList
+import com.pokedaisy.app.companion.ui.LibraryIcons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOff
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VideogameAsset
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -152,6 +137,10 @@ import com.pokedaisy.app.companion.ui.PixelRoundedShape
  * anyway) — every cover, fetched or manually picked, is normalized to this. */
 private const val ICON_ASPECT = 1f
 
+/** The BLOCKED tag ([com.pokedaisy.app.companion.data.BlockedGames]): black, white text, in both looks. */
+internal val BLOCKED_BADGE = androidx.compose.ui.graphics.Color(0xFF202020)
+internal val BLOCKED_BADGE_SHADOW = androidx.compose.ui.graphics.Color(0x99000000)
+
 /**
  * Launcher screen: pick a ROM to play, or import one. ROMs live in
  * `Android/data/<pkg>/files/roms/`; a save + savestates folder is keyed per ROM
@@ -185,6 +174,12 @@ class LibraryActivity : ComponentActivity() {
 
     private val pickPatch = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { patcher.start(it) }
+    }
+
+    /** TOOLS > SPRITE PACK: the makeover's graphics from a pack file (internal for ui-preview). */
+    internal val spritePack by lazy { SpritePackFlow(this) }
+    private val pickSpritePack = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { spritePack.start(it) }
     }
 
     /** LOAD SAVE: the save file picked for a game, waiting on its confirm (internal for ui-preview). */
@@ -282,6 +277,7 @@ class LibraryActivity : ComponentActivity() {
 
     private fun bump() {
         unsupportedRoms = RomFolder.unsupported(this)
+        blockedRoms = RomFolder.blocked(this)
         partialRoms = RomFolder.partial(this)
         revision++
         if (launcherOn) refreshLauncherGames()
@@ -289,6 +285,9 @@ class LibraryActivity : ComponentActivity() {
 
     /** ROMs the second screen can't read, per [RomFolder]'s cache: their NOT SUPPORTED tag (internal for ui-preview). */
     internal var unsupportedRoms by mutableStateOf(emptySet<String>())
+
+    /** Games on the blocked list ([com.pokedaisy.app.companion.data.BlockedGames]): a black BLOCKED tag, over NOT SUPPORTED. */
+    internal var blockedRoms by mutableStateOf(emptySet<String>())
 
     /** ROMs read through a PARTIAL best-effort match: their PARTIALLY SUPPORTED tag (internal for ui-preview). */
     internal var partialRoms by mutableStateOf(emptySet<String>())
@@ -325,6 +324,7 @@ class LibraryActivity : ComponentActivity() {
 
         // The device's marker can change between visits (FeatureFlags): read before setup builds its steps.
         ScreenScraperClient.enabled = FeatureFlags.screenScraper(this)
+        FeatureFlags.applyBlocked(this)
         sort = LibrarySort.of(prefs.librarySort)
         quickView = LibraryView.of(prefs.libraryView)
         // The second screen (and so SWAP) is the game's media page: ScreenScraper's, off until its flag is on.
@@ -391,6 +391,7 @@ class LibraryActivity : ComponentActivity() {
         com.pokedaisy.app.companion.ui.OptionColors.inGame = false
         com.pokedaisy.app.companion.i18n.L10n.apply(prefs.appLanguage, null)
         unsupportedRoms = RomFolder.unsupported(this)
+        blockedRoms = RomFolder.blocked(this)
         partialRoms = RomFolder.partial(this)
         // The support window, once its play time has come (back from a game, usually); never on WHAT'S NEW's visit.
         if (!supportAsk && whatsNew == null) {
@@ -463,11 +464,23 @@ class LibraryActivity : ComponentActivity() {
             com.pokedaisy.app.companion.ui.LibraryTool("LINK", "LINK PLAY", "Trade and battle between your games", nf.badge(nf.LINK_PLAY)) {
                 startActivity(Intent(this, LinkActivity::class.java))
             },
-            com.pokedaisy.app.companion.ui.LibraryTool("EDIT", "SAVE EDITOR", "Change a game's boxes, bag and money", nf.badge(nf.SAVE_TRADE)) {
+            com.pokedaisy.app.companion.ui.LibraryTool("EDIT", "SAVE EDITOR", "Change a game's Pokémon, bag and Pokédex", nf.badge(nf.SAVE_EDITOR_DP) ?: nf.badge(nf.SAVE_EDITOR_GEN5) ?: nf.badge(nf.SAVE_MISSING) ?: nf.badge(nf.SAVE_EDITOR_PLUS)) {
                 startActivity(Intent(this, SaveEditorActivity::class.java).putExtra(SaveEditorActivity.EXTRA_PICK, true))
             },
-            com.pokedaisy.app.companion.ui.LibraryTool("TRADE", "TRADE SAVES", "Move Pokémon between your games' saves", nf.badge(nf.SAVE_TRADE)) {
+            com.pokedaisy.app.companion.ui.LibraryTool("TRADE", "TRADE SAVES", "Move Pokémon between your games' saves", nf.badge(nf.SAVE_EDITOR_DP) ?: nf.badge(nf.SAVE_EDITOR_GEN5) ?: nf.badge(nf.TRADE_BACK) ?: nf.badge(nf.SAVE_EDITOR_PLUS)) {
                 startActivity(Intent(this, SaveEditorActivity::class.java).putExtra(SaveEditorActivity.EXTRA_TRADE, true))
+            },
+            com.pokedaisy.app.companion.ui.LibraryTool("PALPARK", "PAL PARK", "Bring GBA Pokémon to Sinnoh and Johto", nf.badge(nf.PAL_PARK)) {
+                startActivity(Intent(this, SaveEditorActivity::class.java).putExtra(SaveEditorActivity.EXTRA_PAL_PARK, true))
+            },
+            com.pokedaisy.app.companion.ui.LibraryTool("TRANSFER", "POKé TRANSFER", "Send DS Pokémon on to Black and White", nf.badge(nf.POKE_TRANSFER)) {
+                startActivity(Intent(this, SaveEditorActivity::class.java).putExtra(SaveEditorActivity.EXTRA_POKE_TRANSFER, true))
+            },
+            com.pokedaisy.app.companion.ui.LibraryTool("COLLECTION", "COLLECTION", "Every Pokémon in all your saves, in one list", nf.badge(nf.SAVE_COLLECTION)) {
+                startActivity(Intent(this, SaveEditorActivity::class.java).putExtra(SaveEditorActivity.EXTRA_COLLECTION, true))
+            },
+            com.pokedaisy.app.companion.ui.LibraryTool("SPRITES", "SPRITE PACK", "Load other games' looks for MAKEOVER", nf.badge(nf.SPRITE_PACK)) {
+                pickSpritePack.launch(arrayOf("*/*"))
             },
         )
     }
@@ -561,20 +574,20 @@ class LibraryActivity : ComponentActivity() {
                     // TOOLS has no games to sort, show, add or refresh: HELP alone.
                     if (!toolsOpen) {
                     // The header's first button: where UP from the top of the games lands.
-                    HeaderIcon(Icons.AutoMirrored.Filled.Sort, tr("Sort"), m, Modifier.focusRequester(headerFirst)) { pickingSort = true }
+                    HeaderIcon(LibraryIcons.Sort, tr("Sort"), m, Modifier.focusRequester(headerFirst)) { pickingSort = true }
                     androidx.compose.runtime.DisposableEffect(Unit) {
                         headerFirstAttached = true
                         onDispose { headerFirstAttached = false }
                     }
                     HeaderIcon(Icons.Filled.Search, tr("SEARCH"), m) { searching = true }
-                    HeaderIcon(if (gridView) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView, tr("Toggle view"), m) {
+                    HeaderIcon(if (gridView) LibraryIcons.ViewList else LibraryIcons.GridView, tr("Toggle view"), m) {
                         gridView = !gridView
                     }
                     HeaderIcon(Icons.Filled.Add, tr("Add games"), m) { addMenu = true }
                     HeaderIcon(Icons.Filled.Refresh, tr("Refresh"), m) { refreshLibrary() }
                     }
                     // The manual (Settings > HELP), on its own.
-                    HeaderIcon(Icons.AutoMirrored.Filled.HelpOutline, tr("Help"), m) {
+                    HeaderIcon(LibraryIcons.HelpOutline, tr("Help"), m) {
                         startActivity(Intent(this@LibraryActivity, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_SCREEN, SettingsActivity.SCREEN_HELP))
                     }
                     // SETTINGS is the rail's / bar's.
@@ -808,6 +821,8 @@ class LibraryActivity : ComponentActivity() {
                 onAskSupport = { rom -> Thread({ val url = RomSupportRequest.url(rom); runOnUiThread { openUrl(url) } }, "pokedaisy-support-url").start() },
             )
 
+            SpritePackWindow(spritePack, m, small)
+
             UpdateDialog(updates, m, small)
 
             // After any update offer, before the other one-time windows: this update's news.
@@ -982,12 +997,12 @@ class LibraryActivity : ComponentActivity() {
     /** The launcher's header, left to right. */
     private fun launcherHeader(): List<HeaderButton> = listOfNotNull(
         // TOOLS has no games to sort, show, add or refresh: HELP alone.
-        HeaderButton(Icons.AutoMirrored.Filled.Sort, tr("Sort")) { pickingSort = true }.takeIf { !toolsOpen },
+        HeaderButton(LibraryIcons.Sort, tr("Sort")) { pickingSort = true }.takeIf { !toolsOpen },
         HeaderButton(Icons.Filled.Search, tr("SEARCH")) { searching = true }.takeIf { !toolsOpen },
-        HeaderButton(if (gridView) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView, tr("Toggle view")) { gridView = !gridView }.takeIf { !toolsOpen },
+        HeaderButton(if (gridView) LibraryIcons.ViewList else LibraryIcons.GridView, tr("Toggle view")) { gridView = !gridView }.takeIf { !toolsOpen },
         HeaderButton(Icons.Filled.Add, tr("Add games")) { addMenu = true }.takeIf { !toolsOpen },
         HeaderButton(Icons.Filled.Refresh, tr("Refresh")) { refreshLibrary() }.takeIf { !toolsOpen },
-        HeaderButton(Icons.AutoMirrored.Filled.HelpOutline, tr("Help")) {
+        HeaderButton(LibraryIcons.HelpOutline, tr("Help")) {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_SCREEN, SettingsActivity.SCREEN_HELP))
         },
         // SETTINGS is the rail's / bar's (and Y's), as in the classic library.
@@ -1124,7 +1139,7 @@ class LibraryActivity : ComponentActivity() {
                     com.pokedaisy.app.companion.ui.CategoryArt(category, Modifier.fillMaxSize())
                 } else {
                     Icon(
-                        Icons.Filled.VideogameAsset, contentDescription = null,
+                        LibraryIcons.VideogameAsset, contentDescription = null,
                         tint = OptionColors.muted, modifier = Modifier.size(28.dp),
                     )
                 }
@@ -1170,33 +1185,34 @@ class LibraryActivity : ComponentActivity() {
     private fun romMenuItems(rom: File, onRename: () -> Unit, onDelete: () -> Unit): List<RomMenuItem> {
         return buildList {
             if (rom.absolutePath in prefs.favoriteRoms) {
-                add(RomMenuItem(tr("UNFAVORITE"), Icons.Filled.StarBorder, pixel = com.pokedaisy.app.companion.ui.PixelIcons.starOutline) { setFavorite(rom, false) })
+                add(RomMenuItem(tr("UNFAVORITE"), LibraryIcons.StarBorder, pixel = com.pokedaisy.app.companion.ui.PixelIcons.starOutline) { setFavorite(rom, false) })
             } else {
                 add(RomMenuItem(tr("FAVORITE"), Icons.Filled.Star, pixel = com.pokedaisy.app.companion.ui.PixelIcons.star) { setFavorite(rom, true) })
             }
             add(RomMenuItem(tr("INFO"), Icons.Filled.Info, opens = true) { showInfo(rom) })
             add(RomMenuItem(tr("RENAME"), Icons.Filled.Edit, opens = true, onClick = onRename))
             add(RomMenuItem(tr("REPLACE COVER"), Icons.Filled.Search, opens = true) { coverError = null; coverPickerFor = rom })
-            add(RomMenuItem(tr("SET COVER"), Icons.Filled.Image, opens = true) { pendingCoverTarget = rom; pickCoverImage.launch("image/*") })
+            add(RomMenuItem(tr("SET COVER"), LibraryIcons.Image, opens = true) { pendingCoverTarget = rom; pickCoverImage.launch("image/*") })
             if (prefs.romCoverManual(rom)) {
                 add(RomMenuItem(tr("RESET COVER"), Icons.Filled.Refresh) { resetCover(rom) })
             }
             // Two to four GBA games on one link cable (LinkActivity): trades, battles, record mixing between them.
             if (rom.extension.lowercase() !in setOf("gb", "gbc", "nds")) {
-                add(RomMenuItem(tr("LINK PLAY"), Icons.Filled.Link, opens = true) {
+                add(RomMenuItem(tr("LINK PLAY"), LibraryIcons.Link, opens = true) {
                     startActivity(Intent(this@LibraryActivity, LinkActivity::class.java).putExtra(LinkActivity.EXTRA_ROM, rom.absolutePath))
                 })
             }
-            add(RomMenuItem(tr("LOAD SAVE"), Icons.Filled.FileOpen, opens = true) { saveTarget = rom; pickSaveFile.launch(arrayOf("*/*")) })
-            add(RomMenuItem(tr("RESTORE BACKUP"), Icons.Filled.History, opens = true) { showBackups(rom) })
-            // The save's party and PC boxes, read (and edited) from the file; Game Boy and DS saves aren't Gen 3's.
-            if (rom.extension.lowercase() !in setOf("gb", "gbc", "nds")) {
-                add(RomMenuItem(tr("SAVE EDITOR"), Icons.Filled.Inventory2, opens = true) {
+            add(RomMenuItem(tr("LOAD SAVE"), LibraryIcons.FileOpen, opens = true) { saveTarget = rom; pickSaveFile.launch(arrayOf("*/*")) })
+            add(RomMenuItem(tr("RESTORE BACKUP"), LibraryIcons.History, opens = true) { showBackups(rom) })
+            // The save's party and PC boxes, read (and edited) from the file: Gen 3's, Diamond / Pearl / Platinum / HeartGold /
+            // SoulSilver's and Black / White's (with their sequels).
+            if (rom.extension.lowercase() !in setOf("gb", "gbc", "nds") || SaveFileEdits.isDsEditable(rom) || SaveFileEdits.isGen5(rom)) {
+                add(RomMenuItem(tr("SAVE EDITOR"), LibraryIcons.Inventory2, opens = true) {
                     startActivity(Intent(this@LibraryActivity, SaveEditorActivity::class.java).putExtra(SaveEditorActivity.EXTRA_ROM, rom.absolutePath))
                 })
             }
             // This game's saves in a folder of its own (another emulator's), or back to the usual search.
-            add(RomMenuItem(tr("SAVE FOLDER"), Icons.Filled.Folder, opens = true) {
+            add(RomMenuItem(tr("SAVE FOLDER"), LibraryIcons.Folder, opens = true) {
                 if (!StorageAccess.hasAllFilesAccess(this@LibraryActivity)) {
                     StorageAccess.requestAllFilesAccess(this@LibraryActivity)
                     Toast.makeText(this@LibraryActivity, tr("Grant \"All files access\", then tap the button again"), Toast.LENGTH_LONG).show()
@@ -1206,10 +1222,10 @@ class LibraryActivity : ComponentActivity() {
                 }
             })
             if (prefs.romSaveDir(rom) != null) {
-                add(RomMenuItem(tr("DEFAULT SAVE FOLDER"), Icons.Filled.FolderOff) { setGameSaveFolder(rom, null) })
+                add(RomMenuItem(tr("DEFAULT SAVE FOLDER"), LibraryIcons.FolderOff) { setGameSaveFolder(rom, null) })
             }
             // The game's cheats, on Settings' CHEATS page.
-            add(RomMenuItem(tr("CHEATS"), Icons.Filled.Code, opens = true) {
+            add(RomMenuItem(tr("CHEATS"), LibraryIcons.Code, opens = true) {
                 startActivity(Intent(this@LibraryActivity, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_CHEATS_ROM, rom.absolutePath))
             })
             // A shortcut straight into the game, on Android's home screen (GitHub #182).
@@ -1218,7 +1234,7 @@ class LibraryActivity : ComponentActivity() {
                     Toast.makeText(this@LibraryActivity, tr("Your home screen can't add shortcuts"), Toast.LENGTH_LONG).show()
                 }
             })
-            add(RomMenuItem(tr("HIDE"), Icons.Filled.VisibilityOff) { hideRom(rom) })
+            add(RomMenuItem(tr("HIDE"), LibraryIcons.VisibilityOff) { hideRom(rom) })
             // A linked folder's ROM is the player's own file: it can be hidden, never deleted.
             if (!RomFolder.isLinked(prefs, rom)) {
                 add(RomMenuItem(tr("DELETE"), Icons.Filled.Delete, danger = true, opens = true, onClick = onDelete))
@@ -1386,7 +1402,7 @@ class LibraryActivity : ComponentActivity() {
                         if (hasSave) {
                             Spacer(Modifier.width(m.u * 4))
                             Icon(
-                                Icons.Filled.Save, contentDescription = tr("Save file exists"),
+                                LibraryIcons.Save, contentDescription = tr("Save file exists"),
                                 tint = OptionColors.label, modifier = Modifier.size(small.lineHeight),
                             )
                         }
@@ -1398,7 +1414,10 @@ class LibraryActivity : ComponentActivity() {
                             Spacer(Modifier.width(m.u * 4))
                             OptionBadge(tk("NEW"), m, fill = OptionColors.newBadge, shadow = OptionColors.newBadgeShadow)
                         }
-                        if (rom.absolutePath in unsupportedRoms) {
+                        if (rom.absolutePath in blockedRoms) {
+                            Spacer(Modifier.width(m.u * 4))
+                            OptionBadge(tk("BLOCKED"), m, fill = BLOCKED_BADGE, shadow = BLOCKED_BADGE_SHADOW)
+                        } else if (rom.absolutePath in unsupportedRoms) {
                             Spacer(Modifier.width(m.u * 4))
                             OptionBadge(tk("NOT SUPPORTED"), m)
                         } else if (rom.absolutePath in partialRoms) {
@@ -1452,12 +1471,13 @@ class LibraryActivity : ComponentActivity() {
                         if (hasSave) {
                             Spacer(Modifier.width(m.u * 2))
                             Icon(
-                                Icons.Filled.Save, contentDescription = tr("Save file exists"),
+                                LibraryIcons.Save, contentDescription = tr("Save file exists"),
                                 tint = OptionColors.label, modifier = Modifier.size(small.lineHeight),
                             )
                         }
                     }
                     val support = when (rom.absolutePath) {
+                        in blockedRoms -> tk("BLOCKED") to BLOCKED_BADGE
                         in unsupportedRoms -> tk("NOT SUPPORTED") to OptionColors.value
                         in partialRoms -> tk("PARTIALLY SUPPORTED") to OptionColors.muted
                         else -> null
@@ -1466,7 +1486,9 @@ class LibraryActivity : ComponentActivity() {
                         Spacer(Modifier.height(m.u * 2))
                         Row(horizontalArrangement = Arrangement.spacedBy(m.u * 2)) {
                             if (isNew) OptionBadge(tk("NEW"), m, fill = OptionColors.newBadge, shadow = OptionColors.newBadgeShadow)
-                            support?.let { (label, fill) -> OptionBadge(label, m, fill = fill) }
+                            support?.let { (label, fill) ->
+                                OptionBadge(label, m, fill = fill, shadow = if (fill == BLOCKED_BADGE) BLOCKED_BADGE_SHADOW else OptionColors.valueShadow.copy(alpha = 0.6f))
+                            }
                         }
                     }
                 }
@@ -1572,6 +1594,11 @@ class LibraryActivity : ComponentActivity() {
 
     private fun play(rom: File) {
         if (preparing != null) return
+        // A 3DS cart is never read whole before it starts (no CRC: it's gigabytes); the game screen plays it.
+        if (FeatureFlags.n3ds() && rom.extension.lowercase() in com.pokedaisy.app.n3ds.N3dsCart.EXTENSIONS) {
+            launch(rom)
+            return
+        }
         // A ROM whose CRC isn't known (or an archive) is read / unpacked first, off the UI thread: the game's window did
         // it on its own and froze on a 512 MB DS cart.
         if (RomCrcs.needsPrepare(this, rom)) {
@@ -1925,7 +1952,7 @@ class LibraryActivity : ComponentActivity() {
     /** Every window over the main screen (pass keys to them, not the launcher). */
     private val libraryDialogOpen
         get() = searching || pickingSort || addMenu || renaming != null || deleting != null || gameInfo != null || coverPickerFor != null ||
-            pendingImport != null || patcher.step != null || saveLoad != null || backupPick != null || updates.release != null || crashAsk ||
+            pendingImport != null || patcher.step != null || spritePack.step != null || saveLoad != null || backupPick != null || updates.release != null || crashAsk ||
             (expandIntro && !crashAsk) || battleStyleIntroShown || ssIntroShown || whatsNewShown || supportShown || seasonalShown
 
     /** BACK for the library's windows (OptionOverlay & co.): the newest open one closes. */
