@@ -51,7 +51,7 @@ object WhatsNew {
      */
     private val FORK: List<Notes> by lazy {
         listOf(
-            onRelease("1.6.0.1", NOTES_1_6_0, "Hasep: on PokeDaisy 1.6.0, with everything below."),
+            onRelease("1.6.0.1", NOTES_1_6_0, "Hasep: on PokeDaisy 1.6.0; FREE FLIGHT, the scenic FLY and FLY ON from Hasep 2.0.6.PLUS.12."),
         )
     }
 

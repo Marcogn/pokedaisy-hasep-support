@@ -188,9 +188,9 @@ fun hasepFieldItems(s: HasepSymbols, read: (Long, Int) -> ByteArray): FieldItemF
         party = party,
         pc = pc,
         fly = fly,
-        // Heart and Soul's FREE FLIGHT / scenic FLY (PokeDaisy 1.6.0) is at 2.0.6's fixed addresses, which Hasep moves:
-        // none until the table carries pk_flight's functions. FLY stays the game's own warp.
-        flight = null,
+        // FREE FLIGHT / the scenic FLY (PokeDaisy 1.6.0): Heart and Soul's record is at 2.0.6's fixed addresses, which
+        // Hasep moves, so only from a table that carries them (PLUS.12 on); none before, and FLY is the game's own warp.
+        flight = hasepFlight(s, read),
     )
 }
 
@@ -211,6 +211,77 @@ fun hasepFlash(s: HasepSymbols, read: (Long, Int) -> ByteArray): FlashFns {
         fieldCallbacks = listOf(s.code("FieldCallback_Flash"), s.code("SetUpPuzzleEffectRegisteel")),
         partyMenuSlotId = s["gPartyMenu"] + PARTY_MENU_SLOT_ID,
         mapHeader = s["gMapHeader"],
+        codeCrcs = emptyList(),
+    )
+    return f.copy(codeCrcs = f.functions.map { crc(read, it) })
+}
+
+/** The table's names FREE FLIGHT needs beyond FLY's (Hasep 2.0.6.PLUS.12 on); a table without one of them has no flight. */
+private val FLIGHT_SYMBOLS = listOf(
+    "gObjectEvents", "gPlayerAvatar", "gSprites", "gBackupMapLayout", "sMapConnectionFlags", "gSaveBlock1Ptr",
+    "gSaveBlock2Ptr", "gMain", "CB2_Overworld", "sLockFieldControls", "gPaletteFade", "LockPlayerFieldControls",
+    "UnlockPlayerFieldControls", "CreateSprite", "DestroySprite", "StartSpriteAnim", "SpriteCallbackDummy",
+    "gFieldEffectObjectTemplate_Bird", "LoadPlayerObjectEventPalette", "MapGridGetMetatileBehaviorAt",
+    "MapGridGetCollisionAt", "MapGridGetElevationAt", "GetObjectEventIdByPosition", "PlaySE", "gSpriteCoordOffsetX",
+    "gSpriteCoordOffsetY", "gMapHeader", "CurrentMapDrawMetatileAt", "DrawWholeMapView", "gMapGroups", "MAP_GROUP_COUNT",
+    "MAP_GROUPS_COUNT", "sHealLocations", "HEAL_LOCATION_SIZE", "HEAL_LOCATION_COUNT", "RemoveFollowingPokemon",
+    "UpdateFollowingPokemon", "gHasepAppScratch",
+)
+
+/**
+ * [FLIGHT_HEART_AND_SOUL] (FREE FLIGHT, the scenic FLY, FLY ON) at Hasep's addresses, or null on a table without them.
+ * The movements, sounds and landing ground stay Heart and Soul's: the ROM asserts them (src/hasep_symbols.c). Map groups
+ * past the first with no list (gMapGroups' NULLs, as in Heart and Soul) are left out.
+ */
+fun hasepFlight(s: HasepSymbols, read: (Long, Int) -> ByteArray): FlightFns? {
+    if (FLIGHT_SYMBOLS.any { !s.has(it) }) return null
+    val groups = s["MAP_GROUPS_COUNT"].toInt()
+    if (groups !in 1..255) return null
+    val counts = read(s["MAP_GROUP_COUNT"], groups)
+    val lists = read(s["gMapGroups"], 4 * groups)
+    val sizes = (0 until groups).map { g ->
+        val list = (0..3).fold(0L) { v, k -> v or ((lists[4 * g + k].toLong() and 0xFF) shl (8 * k)) }
+        list to (counts[g].toInt() and 0xFF)
+    }.takeWhile { (list, n) -> n > 0 && list in 0x08000000L until 0x0A000000L }.map { it.second }
+    if (sizes.isEmpty()) return null
+    val f = FLIGHT_HEART_AND_SOUL.copy(
+        objectEvents = s["gObjectEvents"],
+        playerAvatar = s["gPlayerAvatar"],
+        sprites = s["gSprites"],
+        vmap = s["gBackupMapLayout"],
+        connectionFlags = s["sMapConnectionFlags"],
+        saveBlock1Ptr = s["gSaveBlock1Ptr"],
+        saveBlock2Ptr = s["gSaveBlock2Ptr"],
+        main = s["gMain"],
+        cb2Overworld = s.code("CB2_Overworld"),
+        lockByte = s["sLockFieldControls"],
+        paletteFade = s["gPaletteFade"],
+        lockControls = s.code("LockPlayerFieldControls"),
+        unlockControls = s.code("UnlockPlayerFieldControls"),
+        createSprite = s.code("CreateSprite"),
+        destroySprite = s.code("DestroySprite"),
+        startSpriteAnim = s.code("StartSpriteAnim"),
+        spriteDummy = s["SpriteCallbackDummy"],   // written as a sprite's callback: the Thumb bit stays
+        birdTemplate = s["gFieldEffectObjectTemplate_Bird"],
+        birdPalette = s.code("LoadPlayerObjectEventPalette"),
+        behaviorAt = s.code("MapGridGetMetatileBehaviorAt"),
+        collisionAt = s.code("MapGridGetCollisionAt"),
+        elevationAt = s.code("MapGridGetElevationAt"),
+        objectAt = s.code("GetObjectEventIdByPosition"),
+        playSe = s.code("PlaySE"),
+        spriteOffset = s["gSpriteCoordOffsetX"],
+        spriteOffsetY = s["gSpriteCoordOffsetY"],
+        mapHeader = s["gMapHeader"],
+        drawMetatileAt = s.code("CurrentMapDrawMetatileAt"),
+        drawView = s.code("DrawWholeMapView"),
+        mapGroups = s["gMapGroups"],
+        mapGroupSizes = sizes,
+        healLocations = s["sHealLocations"],
+        healLocationSize = s["HEAL_LOCATION_SIZE"].toInt(),
+        healLocationCount = s["HEAL_LOCATION_COUNT"].toInt(),
+        followerRemove = s.code("RemoveFollowingPokemon"),
+        followerUpdate = s.code("UpdateFollowingPokemon"),
+        scratch = s["gHasepAppScratch"],
         codeCrcs = emptyList(),
     )
     return f.copy(codeCrcs = f.functions.map { crc(read, it) })

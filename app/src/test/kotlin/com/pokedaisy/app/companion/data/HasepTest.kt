@@ -211,3 +211,24 @@ class HasepRepelTest {
         assertEquals(50, fns.repelSteps(50))
     }
 }
+
+/** FREE FLIGHT needs the names Hasep's table carries from 2.0.6.PLUS.12 (hasepFlight): a PLUS.11 table has none of them, so
+ * no flight there - never Heart and Soul's own record, whose addresses are 2.0.6's - and FLY keeps the game's warp. Flown
+ * headless on a PLUS.12 build: docs/ROM_FEATURES.md's note H. */
+class HasepFlightTest {
+    private val head: ByteArray = javaClass.classLoader!!.getResourceAsStream("fixtures/hasep_wild/rom_head.bin")!!.readBytes()
+    private val rom = { addr: Long, len: Int ->
+        val off = (addr - 0x08000000L).toInt()
+        ByteArray(len) { i -> head.getOrElse(off + i) { 0 } }
+    }
+
+    @Test
+    fun `a table without the flight names has no flight`() {
+        val s = HasepSymbols.parse(rom)!!
+        assertEquals(false, s.has("CB2_Overworld"))
+        assertNull(hasepFlight(s, rom))
+        val fns = hasepFieldItems(s, rom)
+        assertNull(fns.flight)
+        assertNotNull(fns.fly)
+    }
+}

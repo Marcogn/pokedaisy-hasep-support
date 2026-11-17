@@ -667,7 +667,12 @@ change to any of the places listed under "Where it's decided" updates its rows h
     gBattleStruct and SHINY_ODDS (8: what the game draws; Hasep's challenge option changes a new Pokemon's odds, not
     that) from the table, BoxPokemon's forced-shiny bit at +0x1F; a setwildbattle PIKACHU rewritten by `ShinyOdds.Roller`
     (HasepShinyTest) read shiny by the game's own GetMonData(MON_DATA_IS_SHINY) and drawn shiny in battle, the same foe
-    unpatched neither; Falkner's PIDGEY / NOCTOWL as the FOE TEAM (HasepFoeTeamTest). Not tried on a device yet.
+    unpatched neither; Falkner's PIDGEY / NOCTOWL as the FOE TEAM (HasepFoeTeamTest).
+    FREE FLIGHT, the scenic FLY and FLY ON (2.0.6.PLUS.12 on: the table's flight names, `hasepFlight`), headless on a new game
+    built from Hasep's source (mgba_dump's `flighton` with the words `hasepFlight` computed from that ROM, which also matched
+    every function's code): off from New Bark Town into Route 27 and down on land, the controls free; the balloon the same;
+    the scenic route ScenicFly worked out over its 106 map groups (111 steps) flown to Cherrygrove, landing on its heal
+    location (0.1 at 47,8) in front of the Pokemon Center. Not tried on a device yet.
 
 ## What each column is
 
