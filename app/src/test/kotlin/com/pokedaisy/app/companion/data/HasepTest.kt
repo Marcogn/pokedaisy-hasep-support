@@ -144,7 +144,7 @@ class HasepShinyTest {
         assertEquals(true, before.checksumOk)
         assertEquals(25, before.species and 0x7FF)   // species:11 | teraType:5
         // Odds of 1 in 1, so the roll always rewrites; two frames, as on the device.
-        val roller = ShinyOdds.Roller(target, java.util.Random(1))
+        val roller = ShinyOdds.Roller(target, kotlin.random.Random(1))
         val pokes = StringBuilder()
         val writer = { a: Long, bytes: ByteArray ->
             for (i in bytes.indices) pokes.append("poke8 0x%08X 0x%02X\n".format(a + i, bytes[i].toInt() and 0xFF))
@@ -209,32 +209,5 @@ class HasepRepelTest {
         // A Lure's steps aren't a Repel's: the bit set means none left for a Repel.
         assertEquals(0, fns.repelSteps(0x8000 or 50))
         assertEquals(50, fns.repelSteps(50))
-    }
-}
-
-/** The library's verdict (CompanionSupport, which the library tags read) takes Hasep by its table as detect() does: a
- * player's Hasep ROM was tagged NOT SUPPORTED while it played with its companion. */
-class HasepLibraryTest {
-    @get:org.junit.Rule val tmp = org.junit.rules.TemporaryFolder()
-
-    private val head: ByteArray = javaClass.classLoader!!.getResourceAsStream("fixtures/hasep/rom_head.bin")!!.readBytes()
-
-    /** A 32 MB BPEE file (sparse) with [head] at its start: the fixture's head has no Nintendo header, so the game code
-     * is written in. */
-    private fun rom(head: ByteArray): java.io.File = tmp.newFile().also { f ->
-        java.io.RandomAccessFile(f, "rw").use { r ->
-            r.write(head.copyOf().also { "BPEE".toByteArray(Charsets.US_ASCII).copyInto(it, 0xAC) })
-            r.setLength(0x2000000L)
-        }
-    }
-
-    @Test
-    fun `a Hasep ROM is supported in the library`() {
-        assertEquals(true, com.pokedaisy.app.CompanionSupport.isSupported(rom(head)))
-    }
-
-    @Test
-    fun `the same size of BPEE hack without the table is not`() {
-        assertEquals(false, com.pokedaisy.app.CompanionSupport.isSupported(rom(ByteArray(head.size))))
     }
 }

@@ -36,7 +36,8 @@ field tools, with the addresses swapped. A ROM with a newer layout or format tha
 | `companion/WhatsNew.kt` | the fork's own release notes, newest first |
 | `.github/workflows/release.yml` | a Run workflow button that tags `main` as `v<versionName>` (job `tag`) |
 | `NOTICE`, `README.md`, docs/manual, `docs/ROM_FEATURES.md`, `website/src/data/compat.json` | the modification notice, Hasep's rows |
-| `app/src/test/.../HasepTest.kt`, `fixtures/hasep/`, `fixtures/hasep_battle/` | the table, a new game and a trainer battle read through it |
+| `app/src/test/.../HasepTest.kt`, `fixtures/hasep/`, `fixtures/hasep_battle/` | the table, a new game and a trainer battle read through it (run by `shared/`, so it can't use the app's classes) |
+| `app/src/test/.../app/HasepLibraryTest.kt` | the library takes a Hasep ROM as supported (`CompanionSupport`, an app class) |
 
 `companion/data` (so `Hasep.kt`) is also built by the `shared/` Kotlin Multiplatform module for iOS (PokeDaisy 1.6.0):
 no `java.*` there (`crc32` from Hashes.kt, `decodeToString`, `kotlin.concurrent.Volatile`); CI's "Shared code for iOS" checks.
