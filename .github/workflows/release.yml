@@ -149,7 +149,17 @@ jobs:
       - name: NDK + CMake
         run: sdkmanager --install "ndk;28.2.13676358" "cmake;3.22.1" "platforms;android-34" "build-tools;34.0.0"
 
+      # As in ci.yml: the recursive checkout brings Azahar's SDL, whose Android sample project carries a wrapper jar Gradle
+      # doesn't list (nothing runs it), and setup-gradle's own check can't allow one checksum. (The Hasep fork: upstream
+      # fixed ci.yml in 5a1244d6 but not this file, so v1.6.0.1's release stopped here.)
+      - uses: gradle/actions/wrapper-validation@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        with:
+          min-wrapper-count: 2
+          allow-checksums: 2c23278a62dc9f96ab11bee897d9f53e6479d6419135e4560ce822a6431df5e5  # third_party/azahar/externals/sdl2/SDL/android-project
+
       - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        with:
+          validate-wrappers: false
 
       - name: Signing key + Firebase config (from secrets, never committed)
         env:
