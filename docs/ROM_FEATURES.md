@@ -102,7 +102,7 @@ change to any of the places listed under "Where it's decided" updates its rows h
 | Team Rocket Dragonsden | 2026 3.0.9, 3.1 (Spanish) | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — ³⁶ |
 | Too Many Types 2 | 1.5.2 | ✅ | ✅ | ✅ | ✅ | — | ✅ ³⁴ | — | ◐ ⁶ | — | ✅ | — | — | — | ✅ ¹⁹ | — | — | ✅ |
 | Ultra Violet | 1.22 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ ³⁴ | — | ✅ | ✅ | ✅ | ✅ | ✅ ¹⁵ | ✅ ¹⁸ | ✅ ¹⁹ | ✅ | ✅ | ✅ |
-| Unbound | 2.1.1.1, 2.1.1.1 French | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ ³⁴ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ ¹⁶ | — | ✅ ¹⁹ | ✅ | ✅ ³³ | ✅ |
+| Unbound | 2.1.1.1, 2.1.1.1 French | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ ³⁴ ⁴⁰ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ ¹⁶ | — | ✅ ¹⁹ | ✅ | ✅ ³³ | ✅ |
 | Wishes of Tomorrow | 1.2.6 | — | ✅ ²¹ | ✅ ²¹ | ✅ ²¹ | — | — | — | — | — | — ²¹ | — | — | — | — | — | — | ◐ ³⁶ |
 | Unknown FireRed / Emerald hacks edited in place | any (proven by code) | ◐ ³⁰ | ◐ ³⁰ | ◐ ³⁰ | ◐ ³⁰ | — | — | — | ◐ ³⁰ | ◐ ³⁰ | — | — | — | — | — | — | — | — ³⁶ |
 
@@ -651,6 +651,12 @@ change to any of the places listed under "Where it's decided" updates its rows h
     the game's own callers): flown to Rustboro, Fortree, Littleroot and Route 101 (it flies to the routes you've been to,
     as the remakes do). No bag USE / GIVE / TAKE: its bag is packed its own way. Bike / surf, FREE FLIGHT and the AREA map
     weren't tried.
+40. Unbound's FLY and FREE FLIGHT (2026-11-17) go by its own party menu's rule (`FlyFns.withoutMove`, CFRU's
+    ONLY_CHECK_ITEM_FOR_HM_USAGE, read off its code at 0x08A03522, the same in the French build): a Pokémon that knows Fly
+    first, else any Pokémon once flag 0x152D (the bought device) or 0x16E4 (sandbox mode) is set, else with HM02 (item
+    438) in the bag one that CanMonLearnTMTutor (0x089F3B6C) says can learn it. Before, the quick menu said "No one in your
+    party knows FLY" while the game offered Fly (Discord). Checked headless on the user's save: HM02 given, then a Pidgey
+    lead can learn it (0), a Pikachu can't (1); the flags read 0 there (no save with the device bought to try).
 ᴴ. Hasep (the fork's own, docs/HASEP_FORK.md): every address comes from the table its ROM carries (from 2.0.6.PLUS.11 on;
     PLUS.10 and older have none), so each Hasep release reads without a new app. Checked headless on Hasep builds
     (mgba_dump, the app's own calls at the table's addresses): the party, bag, map and battle (HasepTest); PC anywhere (the

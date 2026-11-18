@@ -38,6 +38,7 @@ object WhatsNew {
     /** Newest first. */
     val RELEASES: List<Notes> by lazy {
         FORK + listOf(
+            NOTES_1_6_1,
             NOTES_1_6_0,
             FORK_1_5_0_1_2,
             FORK_1_5_0_1_1,
@@ -51,6 +52,7 @@ object WhatsNew {
      */
     private val FORK: List<Notes> by lazy {
         listOf(
+            onRelease("1.6.1.1", NOTES_1_6_1, "Hasep: on PokeDaisy 1.6.1."),
             onRelease("1.6.0.1", NOTES_1_6_0, "Hasep: on PokeDaisy 1.6.0; FREE FLIGHT, the scenic FLY and FLY ON from Hasep 2.0.6.PLUS.12."),
         )
     }
@@ -79,6 +81,22 @@ object WhatsNew {
                 ),
             ),
             Section(FIXES, listOf("PokeDaisy 1.5.0.1: turning a Samsung Galaxy sideways no longer closes the game.")),
+        ),
+    )
+
+    private val NOTES_1_6_1 = Notes(
+        "1.6.1",
+        listOf(
+            Section(
+                FIXES,
+                listOf(
+                    "Normal speed: games no longer stutter at 1x on 120 Hz screens (AYN Thor, Retroid Pocket 6, many phones), and DS games' top screen no longer stays white.",
+                    "Library: your games stay listed after an update, and a long folder scan keeps what it has found if you leave.",
+                    "FLY in Unbound: works with any Pokémon the game's own menu would fly with, even one that doesn't know the move.",
+                    "DS on one screen: SHADERS now reach the battle buttons and messages too.",
+                    "Archives: a .zip with no game inside says so instead of closing the app.",
+                ),
+            ),
         ),
     )
 
