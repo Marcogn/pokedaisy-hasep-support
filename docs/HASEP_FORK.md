@@ -34,7 +34,7 @@ field tools, with the addresses swapped. A ROM with a newer layout or format tha
 | `app/build.gradle.kts`, `strings.xml` | `applicationId` `com.pokedaisy.hasep`, version `<upstream>.<n>`, name "PokeDaisy Hasep" |
 | `companion/data/ActiveTables.kt` | the three item names Hasep appended (`itemNamesHasep`, ids 901 to 903) |
 | `companion/WhatsNew.kt` | the fork's own release notes, newest first |
-| `.github/workflows/release.yml` | a Run workflow button that tags `main` as `v<versionName>` (job `tag`) |
+| `.github/workflows/release.yml` | a Run workflow button that tags `main` as `v<versionName>` (job `tag`); the build job's wrapper validation allows Azahar's SDL sample jar, as upstream's `ci.yml` does (upstream's `release.yml` doesn't yet: drop ours when it does) |
 | `NOTICE`, `README.md`, docs/manual, `docs/ROM_FEATURES.md`, `website/src/data/compat.json` | the modification notice, Hasep's rows |
 | `app/src/test/.../HasepTest.kt`, `fixtures/hasep/`, `fixtures/hasep_battle/` | the table, a new game and a trainer battle read through it (run by `shared/`, so it can't use the app's classes) |
 | `app/src/test/.../app/HasepLibraryTest.kt` | the library takes a Hasep ROM as supported (`CompanionSupport`, an app class) |
