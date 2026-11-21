@@ -231,4 +231,41 @@ class HasepFlightTest {
         assertNull(fns.flight)
         assertNotNull(fns.fly)
     }
+
+    // Expected values from Hasep's own C (src/pokemon.c's GetArceusMaxHP / GetArceusStat), compiled and run as they are.
+    @Test
+    fun `ARCEUS FORMULAS stats are Hasep's`() {
+        // PKHeX's check: base 120, Lv 100, effort 10 (IV 31 + 252 EVs) gives 490 HP and 390 for any other stat.
+        assertEquals(listOf(490, 390, 390, 390, 390, 390),
+            hasepArceusStats(1, IntArray(6) { 120 }, List(6) { 31 }, List(6) { 252 }, 0, 100))
+        // A Lv 5 CHARMANDER, Modest (+SP. ATK -ATTACK), IVs and EVs mixed (HP, ATTACK, DEFENSE, SPEED, SP. ATK, SP. DEF).
+        assertEquals(listOf(47, 45, 41, 130, 50, 46),
+            hasepArceusStats(4, intArrayOf(39, 52, 43, 65, 60, 50), listOf(15, 20, 26, 31, 10, 0), listOf(0, 36, 0, 252, 0, 100), 15, 5))
+        // Single-precision base terms, as the game: in doubles these come out 1 higher (112, 57, 43).
+        assertEquals(111, hasepArceusStats(1, IntArray(6) { 100 }, List(6) { 0 }, List(6) { 0 }, 0, 5)[0])
+        assertEquals(56, hasepArceusStats(1, IntArray(6) { 25 }, List(6) { 0 }, List(6) { 0 }, 0, 55)[1])
+        assertEquals(42, hasepArceusStats(1, IntArray(6) { 15 }, List(6) { 0 }, List(6) { 0 }, 0, 55)[1])
+        // SHEDINJA keeps 1 HP.
+        assertEquals(1, hasepArceusStats(303, IntArray(6) { 1 }, List(6) { 31 }, List(6) { 0 }, 0, 50)[0])
+    }
+
+    @Test
+    fun `ARCEUS FORMULAS is read live, and is off for an older table`() {
+        val sb3 = 0x02009280L
+        var options: Byte = 0
+        val ram = { addr: Long, len: Int ->
+            when (addr) {
+                0x03000178L -> byteArrayOf(0x80.toByte(), 0x92.toByte(), 0x00, 0x02).copyOf(len)
+                sb3 + 0x60 -> byteArrayOf(options)
+                else -> ByteArray(len)
+            }
+        }
+        val table = HasepSymbols(mapOf("gSaveBlock3Ptr" to 0x03000178L, "SAVEBLOCK3_EXTRA_OPTIONS_OFFSET" to 0x60L,
+            "ARCEUS_FORMULAS_MASK" to 1L), HasepSymbols.LAYOUT_VERSION)
+        assertEquals(false, hasepArceusFormulasOn(table, ram))
+        options = 1
+        assertEquals(true, hasepArceusFormulasOn(table, ram))
+        // PLUS.11's table has none of the three names: the classic formula, as before.
+        assertEquals(false, hasepArceusFormulasOn(HasepSymbols.parse(rom)!!, ram))
+    }
 }
