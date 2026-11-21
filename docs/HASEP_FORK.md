@@ -32,6 +32,7 @@ field tools, with the addresses swapped. A ROM with a newer layout or format tha
 | `WideScreen.kt` | EXPAND and the field reads: Hasep's row (`hasepWideRow`) handed to pk_wide.c under the ROM's CRC |
 | `AppUpdater.kt`, `AppUpdate.kt` | updates from this fork's releases; a notice once per new upstream release |
 | `app/build.gradle.kts`, `strings.xml` | `applicationId` `com.pokedaisy.hasep`, version `<upstream>.<n>`, name "PokeDaisy Hasep" |
+| `companion/data/Gen3Mon.kt`, `companion/data/NativeReader.kt` | `decodeBoxMon` takes the stat formula (`gen3Stats` by default); `readPcBoxes` passes `hasepArceusStats` while Hasep's ARCEUS FORMULAS is on, and keeps that in its cache key |
 | `companion/data/ActiveTables.kt` | the three item names Hasep appended (`itemNamesHasep`, ids 901 to 903) |
 | `companion/WhatsNew.kt` | the fork's own release notes, newest first |
 | `.github/workflows/release.yml` | a Run workflow button that tags `main` as `v<versionName>` (job `tag`); the build job's wrapper validation allows Azahar's SDL sample jar, as upstream's `ci.yml` does (upstream's `release.yml` doesn't yet: drop ours when it does) |
@@ -50,6 +51,12 @@ From Hasep 2.0.6.PLUS.12 the table also has what PokeDaisy 1.6.0's FREE FLIGHT n
 and count; the movements, sounds and landing ground asserted in the ROM). An older table has no flight, and FLY stays the game's
 own warp: Heart and Soul's record can't be used as it is, its addresses are 2.0.6's. RIDE ON isn't there: it works through PLAYER
 LOOK, which Heart and Soul doesn't have.
+
+From Hasep 2.0.6.PLUS.12 the table also has gSaveBlock3Ptr, SAVEBLOCK3_EXTRA_OPTIONS_OFFSET and ARCEUS_FORMULAS_MASK: Hasep's
+ARCEUS FORMULAS option (off by default) swaps every Pokémon's stats for Pokémon Legends: Arceus' formula, so the PC boxes'
+stats, which the app works out itself, use `hasepArceusStats` (Hasep's `src/pokemon.c`, single-precision floats and all;
+`HasepTest` has values from that C) while the option is on, read live (`hasepArceusFormulasOn`). The party's stats are the
+game's own, read from RAM. An older table reads as off. The save editor doesn't take Hasep (a 32 MB ROM).
 
 From Hasep 2.0.6.PLUS.11 the table also has gEnemyParty (FOE TEAM, SHINY ODDS at SHINY_ODDS with the forced-shiny
 bit), gPlayerAvatar (bike / surf) and the Repels' ids (the bag's Repels, SoulGold's way); a table without those names

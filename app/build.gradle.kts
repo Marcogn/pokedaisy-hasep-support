@@ -82,8 +82,8 @@ android {
         // The fork: PokeDaisy's own version (UPSTREAM_VERSION, the release merged in) plus one more part for the fork's
         // builds on it (1.5.0.1.1 = the first on PokeDaisy 1.5.0.1); versionCode is PokeDaisy's * 100 + that part. Both
         // only grow, since PokeDaisy's do: docs/HASEP_FORK.md's "Versions".
-        versionCode = 2201
-        versionName = "1.6.1.1"
+        versionCode = 2202
+        versionName = "1.6.1.2"
         buildConfigField("String", "UPSTREAM_VERSION", "\"1.6.1\"")
         // Whether this build can send crash reports at all (CrashReports.available).
         buildConfigField("boolean", "CRASHLYTICS", crashlytics.toString())

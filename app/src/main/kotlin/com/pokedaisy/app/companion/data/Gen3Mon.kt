@@ -347,6 +347,8 @@ fun decodeBoxMon(
     raw: ByteArray, off: Int, layout: PartyMonLayout = VANILLA_PARTY_MON, baseStats: (Int) -> IntArray? = { null },
     format: BoxRecordFormat = BoxRecordFormat.ENCRYPTED, growthRate: (Int) -> Int? = { null }, movePp: (Int) -> Int? = { null },
     expTables: Array<IntArray> = gen3ExperienceTables,
+    // The Hasep fork: Hasep's ARCEUS FORMULAS swaps the stat formula (hasepStatsFormula).
+    stats: (species: Int, base: IntArray, ivs: List<Int>, evs: List<Int>, nature: Int, level: Int) -> List<Int> = ::gen3Stats,
 ): Mon? {
     val dec = when (format) {
         BoxRecordFormat.ENCRYPTED -> if (raw.size < off + BOX_MON_SIZE) null else decryptGen3Substructs(raw, off)
@@ -359,7 +361,7 @@ fun decodeBoxMon(
     val level = boxMonLevel(expTables, rate, dec.exp)
     val ivs = List(6) { ((dec.ivWord shr (5 * it)) and 0x1F).toInt() }
     val nature = (u32(raw, off) % 25).toInt()
-    val stats = if (egg) null else baseStats(dec.species)?.takeIf { it.size >= 6 }?.let { gen3Stats(dec.species, it, ivs, dec.evs, nature, level) }
+    val stats = if (egg) null else baseStats(dec.species)?.takeIf { it.size >= 6 }?.let { stats(dec.species, it, ivs, dec.evs, nature, level) }
     return Mon(
         species = dec.species,
         level = level,

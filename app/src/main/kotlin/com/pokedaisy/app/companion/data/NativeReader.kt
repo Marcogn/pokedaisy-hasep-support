@@ -690,6 +690,7 @@ private fun cfruExpTables(c: MemoryReader, at: Long): Array<IntArray>? = synchro
 internal val pcBoxesLock = SynchronizedObject()
 private var lastStorageRaw: ByteArray? = null
 private var lastStorage: PcBoxes? = null
+private var lastStorageArceus = false   // the Hasep fork: the boxes' stats depend on ARCEUS FORMULAS too
 
 private fun MemoryReader.readInto(at: Long, raw: ByteArray, off: Int, len: Int) {
     var o = 0
@@ -717,8 +718,11 @@ internal fun readPcBoxes(c: MemoryReader, cfg: NativeConfig): PcBoxes? = runCatc
     val raw = ByteArray(layout.size + (cfru?.extraBoxes?.size ?: 0) * boxBytes)
     c.readInto(at, raw, 0, layout.size)
     cfru?.extraBoxes?.forEachIndexed { i, a -> c.readInto(a, raw, layout.size + i * boxBytes, boxBytes) }
+    // The Hasep fork: with Hasep's ARCEUS FORMULAS on, the game's stats aren't the classic ones (hasepStatsFormula).
+    val arceus = runningHasep?.let { hasepArceusFormulasOn(it, c::readCoreMemory) } == true
+    val stats = if (arceus) ::hasepArceusStats else ::gen3Stats
     synchronized(pcBoxesLock) {
-        if (raw.contentEquals(lastStorageRaw)) lastStorage?.let { return it }
+        if (raw.contentEquals(lastStorageRaw) && arceus == lastStorageArceus) lastStorage?.let { return it }
     }
     val dex = cfg.pokedex
     val base = { species: Int -> dex?.let { PokedexSource.baseStats(it, species) } }
@@ -751,13 +755,13 @@ internal fun readPcBoxes(c: MemoryReader, cfg: NativeConfig): PcBoxes? = runCatc
             wallpaper = raw[wallpaper(b)].toInt() and 0xFF,
             mons = List(PC_BOX_SLOTS) { s ->
                 val o = slot(b, s)
-                decodeBoxMon(raw, o, cfg.monLayout, base, layout.format, growth, movePp, expTables)
+                decodeBoxMon(raw, o, cfg.monLayout, base, layout.format, growth, movePp, expTables, stats)
                     ?.masked(cfg)?.withNativeGender(raw, o, cfg.partyMonLayout, cfg.eggSpecies)
             },
         )
     }
     PcBoxes(currentBox = (raw[0].toInt() and 0xFF).coerceIn(0, layout.boxes - 1), boxes = boxes).also {
-        synchronized(pcBoxesLock) { lastStorageRaw = raw; lastStorage = it }
+        synchronized(pcBoxesLock) { lastStorageRaw = raw; lastStorage = it; lastStorageArceus = arceus }
     }
 }.getOrNull()
 

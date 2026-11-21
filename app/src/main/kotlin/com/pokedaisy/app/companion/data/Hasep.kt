@@ -315,3 +315,60 @@ fun hasepWideRow(s: HasepSymbols): IntArray? {
     row[WIDE_OBJ_GFX_COUNT] = s["NUM_OBJ_EVENT_GFX"].toInt()
     return row
 }
+
+/**
+ * Hasep's ARCEUS FORMULAS (from 2.0.6.PLUS.12, OFF by default): every Pokémon's stats follow Pokémon Legends: Arceus,
+ * so a PC box Pokémon's stats can't be worked out the classic way ([gen3Stats]). Whether it's on, read live: the table's
+ * gSaveBlock3Ptr, then the byte at SAVEBLOCK3_EXTRA_OPTIONS_OFFSET, bit ARCEUS_FORMULAS_MASK. False for an older table.
+ */
+fun hasepArceusFormulasOn(s: HasepSymbols, read: (Long, Int) -> ByteArray): Boolean {
+    if (!s.has("gSaveBlock3Ptr") || !s.has("SAVEBLOCK3_EXTRA_OPTIONS_OFFSET") || !s.has("ARCEUS_FORMULAS_MASK")) return false
+    val b = read(s["gSaveBlock3Ptr"], 4)
+    val sb3 = (0..3).fold(0L) { v, k -> v or ((b[k].toLong() and 0xFF) shl (8 * k)) }
+    if (sb3 !in 0x02000000L until 0x04000000L) return false
+    val options = read(sb3 + s["SAVEBLOCK3_EXTRA_OPTIONS_OFFSET"], 1)[0].toLong() and 0xFF
+    return options and s["ARCEUS_FORMULAS_MASK"] != 0L
+}
+
+/** Legends: Arceus' effort level multipliers, 0 to 10 (Hasep's src/pokemon.c, from PKHeX's PA8.cs). */
+private val ARCEUS_EFFORT_MULTIPLIERS = intArrayOf(0, 2, 3, 4, 7, 8, 9, 14, 15, 16, 25)
+
+/** Hasep's effort level from what a Pokémon has: the IV's (20 and up 1, 26 up 2, 31 gives 3), plus EV * 7 / 252, at most 10. */
+private fun arceusEffortLevel(iv: Int, ev: Int): Int =
+    minOf(10, (if (iv >= 31) 3 else if (iv >= 26) 2 else if (iv >= 20) 1 else 0) + ev * 7 / 252)
+
+/** The BIOS Sqrt: the integer square root, rounded down. */
+private fun isqrt(x: Long): Long {
+    var r = kotlin.math.sqrt(x.toDouble()).toLong()
+    while ((r + 1) * (r + 1) <= x) r++
+    while (r * r > x) r--
+    return r
+}
+
+/** round((sqrt(base) * multiplier + level) / 2.5), half away from zero, with the root in 1/4096ths: the game's integers. */
+private fun arceusEffortBonus(base: Int, effort: Int, level: Int): Int {
+    val v = isqrt(base.toLong() shl 24) * ARCEUS_EFFORT_MULTIPLIERS[effort] + (level.toLong() shl 12)
+    return ((v * 2 + (5 shl 12) / 2) / (5 shl 12)).toInt()
+}
+
+/**
+ * CalculateMonStats with ARCEUS FORMULAS on, in [gen3Stats]' order and arguments. The two base terms are single-precision
+ * floats on purpose, as in the game (and Legends: Arceus): doubles come out 1 higher for some bases and levels. The
+ * nature goes on the base term, before the effort bonus.
+ */
+internal fun hasepArceusStats(species: Int, base: IntArray, ivs: List<Int>, evs: List<Int>, nature: Int, level: Int): List<Int> =
+    List(6) { s ->
+        val bonus = arceusEffortBonus(base[s], arceusEffortLevel(ivs[s], evs[s]), level)
+        if (s == STAT_HP) {
+            if (species == 303) 1   // Shedinja
+            else ((level.toFloat() / 100f + 1f) * base[s].toFloat() + level.toFloat()).toInt() + bonus
+        } else {
+            val n = ((level.toFloat() / 50f + 1f) * base[s].toFloat() / 1.5f).toInt()
+            val withNature = when (s) {
+                natureRaises(nature) -> n * 110 / 100
+                natureLowers(nature) -> n * 90 / 100
+                else -> n
+            }
+            withNature + bonus
+        }
+    }

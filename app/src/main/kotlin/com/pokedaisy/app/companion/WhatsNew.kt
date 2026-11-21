@@ -52,6 +52,12 @@ object WhatsNew {
      */
     private val FORK: List<Notes> by lazy {
         listOf(
+            Notes(
+                "1.6.1.2",
+                listOf(Section(FIXES, listOf(
+                    "Hasep: with Hasep's ARCEUS FORMULAS on (2.0.6.PLUS.12), the stats of the Pokémon in the PC follow its formula.",
+                ))),
+            ),
             onRelease("1.6.1.1", NOTES_1_6_1, "Hasep: on PokeDaisy 1.6.1."),
             onRelease("1.6.0.1", NOTES_1_6_0, "Hasep: on PokeDaisy 1.6.0; FREE FLIGHT, the scenic FLY and FLY ON from Hasep 2.0.6.PLUS.12."),
         )
