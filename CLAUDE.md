@@ -2517,6 +2517,12 @@ it; in game, `SnapshotView.unsupported` swaps every companion tab but SETTINGS f
 and its name to `GameTitles.BY_SHA1` (`GameTitlesTest` checks), its version in the `*_V<ver>_SHA1`
 constant's name, and regenerating the website's `website/src/data/compat.json` (`SiteDataExportTest`
 fails while it's stale: `UPDATE_SITE_DATA=1 ./gradlew :app:testDebugUnitTest --tests '*SiteDataExportTest'`).
+**Releases live on the website since 2026-11-26** (the GitHub account was suspended): notes in `website/src/data/releases.json`,
+files in Cloudflare R2 (`pokedaisy-downloads` on dl.pokedaisy.com, listed by `src/data/release-files.json`, uploaded by
+`website/scripts/release-files.mjs` from the gitignored `website/release-files/<tag>/`), the app's updater on `/api/releases/v1/releases.json` (GitHub's JSON shape,
+`AppUpdater.RELEASES_API`), every download through the counter `/dl/<tag>/<file>` (`functions/downloads.js`, Firestore
+`downloadCounts`, shown on top of releases.json's `downloadsOnGitHub`), nothing on the site links to GitHub (`/contact/`,
+`/docs/legal/`, `/dmca` instead); docs/RELEASING.md's note at the top has the steps.
 **Website** (`website/`, Astro, static, Node 22.23.4+): its ROM check (`src/lib/compat.js`) runs
 `isSupported`'s rules in the browser over that JSON - the ROM is never uploaded; keep the two in step.
 Deployed to Firebase Hosting (`pokedaisy.com`) by `.github/workflows/website.yml` **only with an app release**

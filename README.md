@@ -5,8 +5,7 @@
 <h3>Pokémon, played better. Game Boy to DS, with a live companion, a widescreen overworld, a HUD and quick menu, and every chore one button away.</h3>
 
 <p>
-  <a href="https://github.com/lidor30/pokedaisy/releases/latest"><img src="https://img.shields.io/github/v/release/lidor30/pokedaisy?style=for-the-badge&label=release&color=2f81f7" alt="Latest PokeDaisy release"></a>
-  <a href="https://github.com/lidor30/pokedaisy/releases"><img src="https://img.shields.io/github/downloads/lidor30/pokedaisy/total?style=for-the-badge&label=downloads&color=5c8a3c" alt="Total downloads"></a>
+  <a href="https://pokedaisy.com/#download"><img src="https://img.shields.io/badge/download-pokedaisy.com-2f81f7?style=for-the-badge" alt="Download PokeDaisy"></a>
   <a href="https://discord.gg/vcmyKZZV5q"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv9%2Finvites%2FvcmyKZZV5q%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&suffix=%20members&label=Discord&color=5865F2&style=for-the-badge&logo=discord&logoColor=white" alt="Join PokeDaisy on Discord"></a>
   <a href="https://www.reddit.com/r/PokeDaisy/"><img src="https://img.shields.io/reddit/subreddit-subscribers/PokeDaisy?style=for-the-badge&logo=reddit&logoColor=white&label=r%2FPokeDaisy&color=FF4500" alt="r/PokeDaisy on Reddit"></a>
 </p>
@@ -148,13 +147,13 @@ Any Android 8.0+ device runs the games. PokeDaisy also runs on Linux (Steam Deck
   <img src="https://img.shields.io/badge/iOS-soon-8a8a98?style=for-the-badge&logo=apple&logoColor=white" alt="iOS: coming soon">
 </p>
 
-Every file is on the [latest release](https://github.com/lidor30/pokedaisy/releases/latest). **No games are included:**
+Every file is on [PokeDaisy's website](https://pokedaisy.com/#download). **No games are included:**
 use your own legally dumped ROMs.
 
 ### Android
 
 Android 8.0 or newer: dual-screen handhelds, one-screen handhelds and phones.
-[**Download the APK**](https://github.com/lidor30/pokedaisy/releases/latest) (`PokeDaisy-<version>.apk`) on the
+[**Download the APK**](https://pokedaisy.com/#download-android) (`PokeDaisy-<version>.apk`) on the
 device and open it. A short setup links your ROMs folders, picks where saves go and can add cover art. The app then
 offers each new version by itself. Guide: [Install and first setup](https://pokedaisy.com/docs/install/).
 
@@ -162,24 +161,24 @@ offers each new version by itself. Guide: [Install and first setup](https://poke
 
 | For | Download |
 | --- | --- |
-| Steam Deck and Linux PCs | [`pokedaisy-linux-x86_64.zip`](https://github.com/lidor30/pokedaisy/releases/latest/download/pokedaisy-linux-x86_64.zip) |
-| TrimUI handhelds (CrossMix, NextUI) | [`pokedaisy-linux-aarch64.zip`](https://github.com/lidor30/pokedaisy/releases/latest/download/pokedaisy-linux-aarch64.zip) |
-| PortMaster handhelds (ROCKNIX, Knulli, muOS) | [`pokedaisy-portmaster-aarch64.zip`](https://github.com/lidor30/pokedaisy/releases/latest/download/pokedaisy-portmaster-aarch64.zip) |
-| TrimUI Brick on NXRedux | [`PokeDaisy-NXRedux.zip`](https://github.com/lidor30/pokedaisy/releases/latest/download/PokeDaisy-NXRedux.zip) |
-| Cores for RetroArch, on a PC | [`pokedaisy-libretro-x86_64.zip`](https://github.com/lidor30/pokedaisy/releases/latest/download/pokedaisy-libretro-x86_64.zip) |
-| Cores for RetroArch, on an ARM handheld | [`pokedaisy-libretro-aarch64.zip`](https://github.com/lidor30/pokedaisy/releases/latest/download/pokedaisy-libretro-aarch64.zip) |
+| Steam Deck and Linux PCs | [`pokedaisy-linux-x86_64.zip`](https://pokedaisy.com/downloads/latest/pokedaisy-linux-x86_64.zip) |
+| TrimUI handhelds (CrossMix, NextUI) | [`pokedaisy-linux-aarch64.zip`](https://pokedaisy.com/downloads/latest/pokedaisy-linux-aarch64.zip) |
+| PortMaster handhelds (ROCKNIX, Knulli, muOS) | [`pokedaisy-portmaster-aarch64.zip`](https://pokedaisy.com/downloads/latest/pokedaisy-portmaster-aarch64.zip) |
+| TrimUI Brick on NXRedux | [`PokeDaisy-NXRedux.zip`](https://pokedaisy.com/downloads/latest/PokeDaisy-NXRedux.zip) |
+| Cores for RetroArch, on a PC | [`pokedaisy-libretro-x86_64.zip`](https://pokedaisy.com/downloads/latest/pokedaisy-libretro-x86_64.zip) |
+| Cores for RetroArch, on an ARM handheld | [`pokedaisy-libretro-aarch64.zip`](https://pokedaisy.com/downloads/latest/pokedaisy-libretro-aarch64.zip) |
 
 Guide: [Install on Linux, Steam Deck and handhelds](https://pokedaisy.com/docs/linux-install/).
 
 ### Nintendo 3DS
 
 An early preview, for a 3DS with custom firmware and the Homebrew Launcher:
-[`pokedaisy.3dsx`](https://github.com/lidor30/pokedaisy/releases/latest/download/pokedaisy.3dsx). Guide: [Install on a Nintendo 3DS](https://pokedaisy.com/docs/3ds/).
+[`pokedaisy.3dsx`](https://pokedaisy.com/downloads/latest/pokedaisy.3dsx). Guide: [Install on a Nintendo 3DS](https://pokedaisy.com/docs/3ds/).
 
 ### Windows
 
-Windows 10 or 11, on a 64-bit PC, in the betas for now: `PokeDaisy-<version>-windows-x86_64.zip` on the
-[releases page](https://github.com/lidor30/pokedaisy/releases). Extract it and start `PokeDaisy.exe`. Guide:
+Windows 10 or 11, on a 64-bit PC: `PokeDaisy-<version>-windows-x86_64.zip` on
+[PokeDaisy's website](https://pokedaisy.com/#download-windows). Extract it and start `PokeDaisy.exe`. Guide:
 [Install on Windows](docs/manual/windows-install.md).
 
 ### iOS
@@ -309,7 +308,7 @@ The guides were written from each game's own data and may contain mistakes.
 
 </details>
 
-Want another game supported? Ask in [Game requests](https://github.com/lidor30/pokedaisy/discussions/categories/game-requests), and upvote the ones you want.
+Want another game supported? Ask on the [feedback page](https://pokedaisy.com/feedback/#game).
 
 ## Privacy
 

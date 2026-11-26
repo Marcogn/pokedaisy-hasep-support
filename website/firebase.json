@@ -7,23 +7,133 @@
       "source": "functions",
       "codebase": "default",
       "runtime": "nodejs22",
-      "ignore": ["node_modules", ".git", "*.log"]
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*.log"
+      ]
     }
   ],
   "hosting": {
     "public": "dist",
-    "ignore": ["firebase.json", "firestore.rules", "functions/**", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "functions/**",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "cleanUrls": true,
     "trailingSlash": true,
     "headers": [
       {
+        "source": "/downloads/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
+          }
+        ]
+      },
+      {
+        "source": "/api/**",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      },
+      {
+        "source": "/api/releases/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300"
+          }
+        ]
+      },
+      {
         "source": "/_astro/**",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
       },
       {
         "source": "/fonts/**",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }]
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=604800"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/downloads/latest/:file",
+        "destination": "/dl/v1.6.2.2/:file",
+        "type": 302
+      },
+      {
+        "source": "/dmca",
+        "destination": "/docs/legal/#reporting-content-you-own",
+        "type": 301
+      },
+      {
+        "source": "/legal",
+        "destination": "/docs/legal/",
+        "type": 301
+      },
+      {
+        "source": "/releases/latest",
+        "destination": "/releases/v1.6.2.2/",
+        "type": 302
+      },
+      {
+        "source": "/releases/tag/:tag",
+        "destination": "/releases/:tag/",
+        "type": 301
+      },
+      {
+        "source": "/releases/download/:tag/:file",
+        "destination": "/dl/:tag/:file",
+        "type": 302
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/dl/**",
+        "function": {
+          "functionId": "downloads",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/downloads/v1/count.json",
+        "function": {
+          "functionId": "downloads",
+          "region": "us-central1"
+        }
       }
     ]
+  },
+  "emulators": {
+    "hosting": {
+      "port": 5055
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8085
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
   }
 }

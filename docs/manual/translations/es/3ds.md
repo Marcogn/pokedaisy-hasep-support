@@ -19,7 +19,7 @@ PokeDaisy también funciona en Nintendo 3DS, como aplicación homebrew: tu juego
 
 ## Paso 1: consigue la aplicación
 
-1. En un ordenador, abre la [página de versiones de PokeDaisy](https://github.com/lidor30/pokedaisy/releases).
+1. En un ordenador, abre la [página de versiones de PokeDaisy](https://pokedaisy.com/#download-3ds).
 2. En la versión más reciente que tenga un archivo para 3DS, descarga `pokedaisy.3dsx`.
 
 ## Paso 2: cópiala a la tarjeta SD

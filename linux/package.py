@@ -89,7 +89,7 @@ if a.dsperate:
     shutil.copy2(repo/'linux/dsperate/README.md',dest/'DS-EXPERIMENT.md')
 sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
 core=subprocess.check_output(['git','rev-parse','HEAD:third_party/mgba'],cwd=repo,text=True).strip()
-(dest/'SOURCE.txt').write_text(f'Source: https://github.com/lidor30/pokedaisy\nFork: https://github.com/keeganwhitacre/pokedaisy-brick\nCommit: {sha}\nmGBA: {core}\nBuild: linux/README.md at this commit\n')
+(dest/'SOURCE.txt').write_text(f'Source: https://pokedaisy.com (the source archive beside each release)\nFork: https://github.com/keeganwhitacre/pokedaisy-brick\nCommit: {sha}\nmGBA: {core}\nBuild: linux/README.md at this commit\n')
 if any('_gba_' in c.name for c in a.core):
     agba=subprocess.check_output(['git','rev-parse','HEAD:third_party/armgba'],cwd=repo,text=True).strip()
     with (dest/'SOURCE.txt').open('a') as f:

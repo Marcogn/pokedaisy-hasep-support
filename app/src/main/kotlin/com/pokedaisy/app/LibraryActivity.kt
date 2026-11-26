@@ -719,7 +719,7 @@ class LibraryActivity : ComponentActivity() {
                 LaunchedEffect(notes) { prefs.whatsNewSeen = notes.version }
                 com.pokedaisy.app.companion.ui.WhatsNewWindow(
                     notes, m, small,
-                    onReleasePage = { openUrl("${AppUpdater.RELEASES_PAGE}/tag/v${notes.version}") },
+                    onReleasePage = { openUrl("${AppUpdater.RELEASES_PAGE}v${notes.version}/") },
                     onClose = { whatsNew = null },
                 )
             }

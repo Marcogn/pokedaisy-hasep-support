@@ -266,4 +266,4 @@ A few things to know:
 - Saves are found by the ROM's file name in your save folders, as usual. To share saves with the frontend's emulator, add its save folder in Settings > `FOLDERS` (see [Saves, backups and save states](saves.md#where-your-saves-live)).
 - Starting another game from the frontend while one is open switches to it; the open one is suspended first.
 
-There are step-by-step guides for [ES-DE](https://github.com/lidor30/pokedaisy/blob/main/docs/es-de/README.md) and [iiSU](https://github.com/lidor30/pokedaisy/blob/main/docs/iisu/README.md).
+There are step-by-step guides for [ES-DE](https://pokedaisy.com/guides/es-de/) and [iiSU](https://pokedaisy.com/guides/iisu/).

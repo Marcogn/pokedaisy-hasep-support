@@ -4,7 +4,6 @@
 // HTML so search engines get the whole text; the app shows the English page from the docs API.
 import DocsLayout from '../layouts/DocsLayout.astro';
 import DocBlocks from '../components/DocBlocks.astro';
-import { REPO_URL } from '../lib/releases.js';
 import { LANGUAGES, language, trFor } from '../i18n/index.js';
 
 interface Props {
@@ -49,7 +48,6 @@ const jsonLd = [
     ],
   },
 ];
-const source = translated ? `docs/manual/translations/${lang}/${page.slug}.md` : `docs/manual/${page.slug}.md`;
 ---
 <DocsLayout title={`${page.title} · ${tr('PokeDaisy docs')}`} description={page.summary} docs={docs} current={page.slug} toc={toc} jsonLd={jsonLd} paths={paths}>
   <article class="doc f-card" lang={translated ? language(lang).hreflang : undefined}>
@@ -72,7 +70,7 @@ const source = translated ? `docs/manual/translations/${lang}/${page.slug}.md` :
         {next && <a class="next f-card" href={`/docs/${next.slug}/`}><small>NEXT</small><span>{next.title}</span></a>}
       </nav>
     )}
-    <p class="doc-edit" set:html={tr('Something wrong or missing here? <a href="{edit}">Edit this page on GitHub</a> or <a href="{bug}">tell us</a>.', { edit: `${REPO_URL}/edit/main/${source}`, bug: tr.path('/feedback/#bug') })} />
+    <p class="doc-edit" set:html={tr('Something wrong or missing here? <a href="{bug}">Tell us</a>.', { bug: tr.path('/feedback/#bug') })} />
   </article>
 </DocsLayout>
 

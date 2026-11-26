@@ -85,7 +85,7 @@ function make(o) {
         `${s} .glow{background:radial-gradient(closest-side,${o.glow[0]},${o.glow[1]} 60%,transparent)}`,
         ...(dark ? [
           `${s} ::selection{background:var(--yellow);color:var(--shade)}`,
-          `${s} .icon-link[aria-label='GitHub'] .pixel{filter:brightness(0) invert(.95)}`,
+          `${s} .px-tux svg{filter:var(--tux-outline)}`,
           `${s} .btn{filter:drop-shadow(0 calc(var(--px)*2) 0 var(--shade))}`,
           `${s} .btn:hover{filter:drop-shadow(0 calc(var(--px)*3) 0 var(--shade))}`,
           `${s} .btn:active{filter:none}`,

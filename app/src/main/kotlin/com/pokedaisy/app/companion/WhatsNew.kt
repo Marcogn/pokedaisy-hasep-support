@@ -3,7 +3,7 @@ package com.pokedaisy.app.companion
 /**
  * WHAT'S NEW: the few lines a player cares about in a release, which the Library shows once after an update
  * ([com.pokedaisy.app.companion.ui.WhatsNewWindow]). Written with each release, beside `make bump` (docs/RELEASING.md):
- * short, the highlights only - RELEASE PAGE opens the GitHub release for the rest. Every line starts with what it is
+ * short, the highlights only - RELEASE PAGE opens the release on the website's releases page for the rest. Every line starts with what it is
  * about and a colon ("SHINY ODDS: ..."), which the window draws red. English, like the manual; the window's own words
  * (title, section titles, buttons) are translated. WhatsNewTest fails while the app's version has no notes, or a line
  * has no lead-in.
@@ -38,6 +38,10 @@ object WhatsNew {
     /** Newest first. */
     val RELEASES: List<Notes> by lazy {
         listOf(
+            hotfix(
+                "1.6.2.2", NOTES_1_6_2,
+                "1.6.2.2 HOTFIX: updates now come from pokedaisy.com, and games open again on the Anbernic RG Rotate.",
+            ),
             hotfix("1.6.2.1", NOTES_1_6_2, "1.6.2.1 HOTFIX: games open again on the Anbernic RG Rotate instead of closing at once."),
             NOTES_1_6_1,
             NOTES_1_6_0,

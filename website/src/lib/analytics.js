@@ -12,10 +12,10 @@ const ROM_REASONS = ['unknown-hack', 'retail-hack', 'revision', 'other-game', 'g
 
 // event -> parameter -> the values it may take (a list, or a pattern the whole value must match).
 export const EVENTS = {
-  download_apk: { where: ['hero', 'latest', 'releases', 'nav', 'footer', 'page', 'downloads', 'modal', 'beta'], version: /^\d{1,3}(\.\d{1,3}){2,3}$/, platform: ['android', 'linux', '3ds'] },
+  download_apk: { where: ['hero', 'latest', 'releases', 'nav', 'footer', 'page', 'downloads', 'modal', 'beta'], version: /^\d{1,3}(\.\d{1,3}){2,3}$/, platform: ['android', 'linux', 'windows', '3ds'] },
   rom_check: { verdict: ['supported', 'in-progress', 'unsupported', 'error'], reason: ROM_REASONS },
   feedback_sent: { kind: ['game', 'bug', 'feature'], ok: ['yes', 'no'] },
-  link_click: { to: ['github', 'reddit', 'discord', 'kofi', 'patreon', 'coffee'], where: ['hero', 'latest', 'releases', 'nav', 'footer', 'page'] },
+  link_click: { to: ['gitlab', 'reddit', 'discord', 'kofi', 'patreon', 'coffee'], where: ['hero', 'latest', 'releases', 'nav', 'footer', 'page'] },
 };
 
 const allowed = (rule, value) =>
@@ -57,13 +57,15 @@ export function linkEvent(href, where) {
   try { u = new URL(href); } catch { return null; }
   const host = u.hostname.replace(/^www\./, '');
   const path = u.pathname;
-  if (host === 'github.com' && /^\/lidor30\/pokedaisy\/releases\/(latest|download\/)/i.test(path) || path.endsWith('.apk')) {
-    const version = path.match(/\/download\/v([\d.]+)\//)?.[1];
-    // Which platform's file (the DOWNLOAD cards): the APK, a Linux package or the 3DS app; a release page link has none.
-    const platform = path.endsWith('.apk') ? 'android' : path.endsWith('.3dsx') || path.endsWith('.cia') ? '3ds' : path.endsWith('.zip') ? 'linux' : null;
+  // A release's file on this site (/dl/v<version>/<file>, the counter, or /downloads/..., the file), or an APK anywhere.
+  if (LIVE_HOSTS.includes(u.hostname) && /^\/(dl|downloads)\//i.test(path) || path.endsWith('.apk')) {
+    const version = path.match(/\/(?:dl|downloads)\/v([\d.]+)\//)?.[1];
+    // Which platform's file (the DOWNLOAD cards): the APK, a Windows or Linux package or the 3DS app.
+    const platform = path.endsWith('.apk') ? 'android' : path.endsWith('.3dsx') || path.endsWith('.cia') ? '3ds'
+      : /windows/i.test(path) && path.endsWith('.zip') ? 'windows' : path.endsWith('.zip') ? 'linux' : null;
     return { name: 'download_apk', params: { where, ...(version && { version }), ...(platform && { platform }) } };
   }
-  const to = host === 'github.com' && /^\/lidor30\/pokedaisy/i.test(path) ? 'github'
+  const to = host === 'gitlab.com' && /^\/pokedaisy\/pokedaisy/i.test(path) ? 'gitlab'
     : host === 'reddit.com' ? 'reddit'
     : host === 'discord.gg' || host === 'discord.com' ? 'discord'
     : host === 'ko-fi.com' ? 'kofi'

@@ -17,7 +17,7 @@ O PokeDaisy também corre no Linux: num Steam Deck, num PC com Linux e em consol
 
 ## Que ficheiro transferir
 
-Abra a [página de versões do PokeDaisy](https://github.com/lidor30/pokedaisy/releases) e, na versão mais recente que tenha ficheiros para Linux, transfira o do seu dispositivo:
+Abra a [página de versões do PokeDaisy](https://pokedaisy.com/#download-linux) e, na versão mais recente que tenha ficheiros para Linux, transfira o do seu dispositivo:
 
 | O seu dispositivo | Transferência |
 | --- | --- |

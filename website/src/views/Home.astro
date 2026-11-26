@@ -6,7 +6,7 @@ import Downloads from '../components/Downloads.astro';
 import HeroDevice from '../components/HeroDevice.astro';
 import HeroSingleDevice from '../components/HeroSingleDevice.astro';
 import data from '../data/compat.json';
-import { REPO_URL, formatDate, getReleases, getDownloads, highlights } from '../lib/releases.js';
+import { formatDate, getReleases, getDownloads, downloadsBefore, highlights, COUNT_API } from '../lib/releases.js';
 import { REDDIT_URL, DISCORD_URL, KOFI_URL, PATREON_URL, COFFEE_URL } from '../lib/links.js';
 import { trFor, msg } from '../i18n/index.js';
 import { loadRomFeatures, UNLISTED } from '../lib/romFeatures.js';
@@ -15,7 +15,7 @@ const tr = trFor(Astro.url);
 
 const releases = await getReleases();
 const latest = releases[0];
-const download = latest?.apk ?? `${REPO_URL}/releases/latest`;
+const download = latest?.apk ?? '/releases/';
 const downloads = await getDownloads();
 
 const gameCount = new Set(data.matrix.rows.map((r) => r.game)).size;
@@ -113,10 +113,10 @@ const [thanksBefore, thanksAfter] = tr('THANK YOU FOR {n} DOWNLOADS!', { n: mile
       </div>
       <!-- The community: the Discord for help and chat, the subreddit. -->
       <div class="cta community">
-        <a class="btn f-discord h-discordHot" href={DISCORD_URL}><Pixel name="discord" scale={0.667} /> {tr('JOIN THE DISCORD')}</a>
+        <a class="btn f-discord h-discordHot" href={DISCORD_URL}><Pixel name="discord" scale={0.667} /> DISCORD</a>
         <a class="btn f-reddit h-redditHot" href={REDDIT_URL}><Pixel name="reddit" scale={0.667} /> r/POKEDAISY</a>
       </div>
-      <a class="downloads" href={`${REPO_URL}/releases`} data-downloads hidden={!downloads}>
+      <a class="downloads" href={tr.path('/releases/')} data-downloads={downloadsBefore()} data-count-api={COUNT_API} hidden={!downloads}>
         <Pixel name="download" scale={1} />
         <span class="dl-count" data-downloads-count>{downloads.toLocaleString(tr.locale)}</span>
         <span class="dl-label">{tr('DOWNLOADS')}</span>
@@ -347,13 +347,12 @@ const [thanksBefore, thanksAfter] = tr('THANK YOU FOR {n} DOWNLOADS!', { n: mile
           <a class="btn f-patreon h-patreonHot big" href={PATREON_URL}><Pixel name="patreon" scale={0.667} /> PATREON</a>
           <a class="btn f-coffee h-coffeeHot big" href={COFFEE_URL}><Pixel name="cup" scale={0.667} /> {tr('BUY ME A COFFEE')}</a>
         </div>
-        <p class="small muted">{tr('Bug reports, game requests and a star help just as much:')}</p>
+        <p class="small muted">{tr('Bug reports and game requests help just as much:')}</p>
         <div class="cta">
           <a class="btn f-btn h-btnHot small" href="/docs/"><Pixel name="guide" scale={0.5} /> {tr('READ THE MANUAL')}</a>
           <a class="btn f-btn h-btnHot small" href={tr.path('/feedback/#bug')}><Pixel name="bug" scale={0.667} /> {tr('REPORT A BUG')}</a>
           <a class="btn f-btn h-btnHot small" href={tr.path('/feedback/#game')}><Pixel name="logo" scale={0.334} /> {tr('REQUEST A GAME')}</a>
           <a class="btn f-btn h-btnHot small" href="/feedback/#feature"><Pixel name="guide" scale={0.5} /> {tr('SUGGEST A FEATURE')}</a>
-          <a class="btn f-btn h-btnHot small" href={REPO_URL}><Pixel name="star" scale={0.667} /> {tr('STAR ON GITHUB')}</a>
           <a class="btn f-reddit h-redditHot small" href={REDDIT_URL}><Pixel name="reddit" scale={0.5} /> {tr('JOIN r/POKEDAISY')}</a>
           <a class="btn f-discord h-discordHot small" href={DISCORD_URL}><Pixel name="discord" scale={0.5} /> {tr('JOIN THE DISCORD')}</a>
         </div>
@@ -419,12 +418,14 @@ const [thanksBefore, thanksAfter] = tr('THANK YOU FOR {n} DOWNLOADS!', { n: mile
   @keyframes bob { 50% { transform: translateY(var(--px)); } }
   .cta { display: flex; flex-wrap: wrap; gap: 16px 20px; align-items: center; }
   .ver { opacity: 0.85; font-size: 0.85em; margin-left: 4px; }
-  .community { margin-top: 18px; }
+  /* The two community buttons as one pair: each as wide as the wider one. */
+  .community { margin-top: 18px; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: stretch; }
+  .community .btn { justify-content: center; }
   .platforms, .downloads, .tick, .tab-name { font-family: var(--font-pixel); }
   .platforms { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); text-decoration: none; font-size: var(--t-s); letter-spacing: 0.0625em; }
   .platforms span { margin-left: 4px; }
   .platforms:hover span { color: var(--red); text-decoration: underline; }
-  /* Every file downloaded from GitHub releases: counted at build, refreshed in the browser. Big: it's the proof. */
+  /* Every file downloaded: GitHub's count plus the site's own, counted at build, refreshed in the browser. Big: it's the proof. */
   .downloads { display: inline-flex; align-items: center; gap: 14px; margin-top: 36px; text-decoration: none; color: var(--ink); }
   .downloads[hidden] { display: none; }
   .dl-count { font-size: calc(var(--t-xl) * 0.85); line-height: 1; text-shadow: var(--bold); letter-spacing: 0.0625em; }
@@ -551,7 +552,6 @@ const [thanksBefore, thanksAfter] = tr('THANK YOU FOR {n} DOWNLOADS!', { n: mile
 </style>
 
 <script>
-  import { releaseDownloads } from '../lib/releases.js';
 
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -608,18 +608,20 @@ const [thanksBefore, thanksAfter] = tr('THANK YOU FOR {n} DOWNLOADS!', { n: mile
     clips.forEach((v) => watch.observe(v));
   }
 
-  // The download count, fresh from GitHub (the build's number stays if that fails or is rate-limited).
-  const dl = document.querySelector<HTMLElement>('[data-downloads]');
-  fetch('https://api.github.com/repos/lidor30/pokedaisy/releases?per_page=100', { headers: { Accept: 'application/vnd.github+json' } })
-    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-    .then((list: any[]) => {
-      const n = releaseDownloads(list);
-      if (dl && n > Number(dl.querySelector('[data-downloads-count]')!.textContent!
-        .replace(/\D/g, ''))) {
-        dl.querySelector('[data-downloads-count]')!.textContent = n.toLocaleString(document.documentElement.lang);
-        dl.hidden = false;
-      }
-    })
-    .catch(() => {});
 
+  // The download count, fresh from the site's counter (the build's number stays if that fails).
+  const dl = document.querySelector<HTMLElement>('[data-downloads]');
+  if (dl) {
+    fetch(dl.dataset.countApi!)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((c: { site?: number }) => {
+        const n = Number(dl.dataset.downloads) + (Number(c.site) || 0);
+        const shown = dl.querySelector('[data-downloads-count]')!;
+        if (n > Number(shown.textContent!.replace(/\D/g, ''))) {
+          shown.textContent = n.toLocaleString(document.documentElement.lang);
+          dl.hidden = false;
+        }
+      })
+      .catch(() => {});
+  }
 </script>

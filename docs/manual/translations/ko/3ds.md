@@ -19,7 +19,7 @@ PokeDaisy는 닌텐도 3DS에서도 홈브루 앱으로 실행돼요. 위 화면
 
 ## 1단계: 앱 받기
 
-1. 컴퓨터에서 [PokeDaisy 릴리스 페이지](https://github.com/lidor30/pokedaisy/releases)를 열어요.
+1. 컴퓨터에서 [PokeDaisy 릴리스 페이지](https://pokedaisy.com/#download-3ds)를 열어요.
 2. 3DS 파일이 있는 가장 새로운 릴리스에서 `pokedaisy.3dsx`를 내려받아요.
 
 ## 2단계: SD 카드에 복사하기

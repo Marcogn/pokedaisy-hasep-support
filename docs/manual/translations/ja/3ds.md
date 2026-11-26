@@ -19,7 +19,7 @@ PokeDaisyはニンテンドー3DSでも自作アプリ（homebrew）として動
 
 ## ステップ1：アプリを手に入れる
 
-1. パソコンで [PokeDaisyのリリースページ](https://github.com/lidor30/pokedaisy/releases) を開きます。
+1. パソコンで [PokeDaisyのリリースページ](https://pokedaisy.com/#download-3ds) を開きます。
 2. 3DS用のファイルがある一番新しいリリースから、`pokedaisy.3dsx` をダウンロードします。
 
 ## ステップ2：SDカードにコピーする

@@ -99,7 +99,7 @@ The companion reads their party, bag, map, Pokédex and guide, with pictures, Po
 | Pokémon SoulGold | 1.1.4, three builds of 1.2, and two of 1.2.1 |
 | Pokémon R.O.W.E. | 2.1.9.1 Experimental |
 
-Not every game gets every tab yet. Some hacks have the guide's live pages only, a few have no guide, and battle panes in many hacks haven't been checked in every kind of battle. The full table, tab by tab, is on the [compatibility page](https://pokedaisy.com/compatibility/) and in the [README](https://github.com/lidor30/pokedaisy#supported-games).
+Not every game gets every tab yet. Some hacks have the guide's live pages only, a few have no guide, and battle panes in many hacks haven't been checked in every kind of battle. The full table, tab by tab, is on the [compatibility page](https://pokedaisy.com/compatibility/).
 
 ## Games removed at their makers' request
 
@@ -165,7 +165,7 @@ When the companion can't read a game at all, every tab except `SETTINGS` shows a
 
 Want it supported? Tap `ASK FOR SUPPORT`, on that page or in the game's library `INFO`. It opens the game request form on the [feedback page](https://pokedaisy.com/feedback/), filled in with the file's name, game code, size and SHA-1, so the right version can be found. You don't need a GitHub account. It never sends the ROM itself.
 
-Every request goes up in [Game requests](https://github.com/lidor30/pokedaisy/discussions/categories/game-requests) on GitHub. Upvote the games you want: the most wanted ones help decide what comes next.
+Every request is read, and the most wanted games help decide what comes next.
 
 > [!TIP]
 > Before you ask, run the file through the [ROM check](https://pokedaisy.com/compatibility/). If it's a supported hack in a different version, getting the listed version is the quickest fix.

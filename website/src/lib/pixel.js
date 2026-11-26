@@ -811,6 +811,15 @@ SPRITES.android = {
     '..GGGGGGGGGGGGGGGGGGGGGGGGGGGG..', '................................',
   ],
 };
+// GitLab's mark, our own pixel drawing: the ears, the face's bands from red in the middle to yellow at its sides.
+SPRITES.gitlab = {
+  pal: { R: '#e24329', O: '#fc6d26', Y: '#fca326' },
+  rows: [
+    'R.............R', 'RR...........RR', 'RRR.........RRR', 'ORRR.......RRRO', 'OORRRRRRRRRRROO',
+    'YOORRRRRRRRROOY', 'YYOORRRRRRROOYY', '.YYOORRRRROOYY.', '..YYOORRROOYY..', '...YYOOROOYY...',
+    '....YYOOOYY....', '.....YYOYY.....', '......YYY......', '.......Y.......',
+  ],
+};
 SPRITES.tux = {
   pal: { K: '#202020', W: '#ffffff', Y: '#f8c030', O: '#d88800' },
   rows: [

@@ -22,8 +22,8 @@ first game.
 
 ## Download and start it
 
-1. Open the [PokeDaisy releases page](https://github.com/lidor30/pokedaisy/releases) and, under the newest release
-   that has a Windows file, download `PokeDaisy-<version>-windows-x86_64.zip`.
+1. Open the [Windows download on PokeDaisy's site](https://pokedaisy.com/#download-windows) and download
+   `PokeDaisy-<version>-windows-x86_64.zip`.
 2. Right click the zip, pick **Extract All** and extract it somewhere you can write to, for example a `PokeDaisy`
    folder in your Documents. Don't run it from inside the zip.
 3. In that folder, make a folder called `roms` and copy your games into it. (PokeDaisy makes it the first time it

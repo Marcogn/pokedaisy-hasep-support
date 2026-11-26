@@ -21,7 +21,7 @@ PokeDaisy fonctionne aussi sur Linux : sur un Steam Deck, un PC Linux et des con
 
 ## Quel fichier télécharger
 
-Ouvrez la [page des versions de PokeDaisy](https://github.com/lidor30/pokedaisy/releases) et, dans la version la plus récente qui propose des fichiers Linux, téléchargez celui qui correspond à votre appareil :
+Ouvrez la [page des versions de PokeDaisy](https://pokedaisy.com/#download-linux) et, dans la version la plus récente qui propose des fichiers Linux, téléchargez celui qui correspond à votre appareil :
 
 | Votre appareil | Téléchargement |
 | --- | --- |

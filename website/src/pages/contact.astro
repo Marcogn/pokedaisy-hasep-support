@@ -1,0 +1,44 @@
+---
+// Where to reach PokeDaisy, by what it's about: help and chat on Discord, bugs / games / ideas through the feedback
+// form, rights holders by email (the manual's legal page has the notice's details). English, like the manual.
+import Base from '../layouts/Base.astro';
+import Pixel from '../components/Pixel.astro';
+import { DISCORD_URL, REDDIT_URL } from '../lib/links.js';
+
+const LEGAL_EMAIL = 'legal@pokedaisy.com';
+const ways = [
+  { icon: 'discord', scale: 0.667, title: 'Help and a chat', text: 'Questions, setup help, or just to talk about your run: the Discord is the quickest place to get an answer.', href: DISCORD_URL, label: 'JOIN THE DISCORD' },
+  { icon: 'bug', scale: 0.667, title: 'A bug, a game or an idea', text: 'Report a bug, ask for a game to be supported or suggest a feature on the feedback page. No account needed.', href: '/feedback/', label: 'FEEDBACK' },
+  { icon: 'reddit', scale: 0.5, title: 'The community', text: 'Clips, setups and news from other players.', href: REDDIT_URL, label: 'r/POKEDAISY' },
+  { icon: 'guide', scale: 0.5, title: 'Copyright, DMCA and legal', text: `If you own the rights to something on a PokeDaisy site or service, or you make a game PokeDaisy supports and want that to stop, write to ${LEGAL_EMAIL}. The legal page says what a notice needs.`, href: `mailto:${LEGAL_EMAIL}`, label: LEGAL_EMAIL, more: { href: '/docs/legal/', label: 'LEGAL, COPYRIGHT AND DMCA' } },
+];
+---
+<Base title="Contact · PokeDaisy" description="How to reach PokeDaisy: help on Discord, bugs and game requests on the feedback page, and legal or DMCA notices by email." localized={false}>
+  <section class="block container narrow">
+    <div class="section-head">
+      <span class="eyebrow">CONTACT</span>
+      <h1 class="heading">Get in touch</h1>
+      <p class="lead">PokeDaisy is made by Lidor Itzhari. Pick what it's about and it reaches the right place.</p>
+    </div>
+    <div class="ways">
+      {ways.map((w) => (
+        <article class="way f-card">
+          <h2 class="way-title"><Pixel name={w.icon} scale={w.scale} /> {w.title}</h2>
+          <p>{w.text}</p>
+          <p class="cta">
+            <a class="btn f-btn h-btnHot small" href={w.href}>{w.label}</a>
+            {w.more && <a class="btn f-btn h-btnHot small" href={w.more.href}>{w.more.label}</a>}
+          </p>
+        </article>
+      ))}
+    </div>
+  </section>
+</Base>
+
+<style>
+  .narrow { max-width: 900px; }
+  .ways { display: grid; gap: 20px; }
+  .way { padding: calc(var(--px) * 9); display: grid; gap: 12px; filter: var(--hard-shadow); }
+  .way-title { font-family: var(--font-pixel); display: flex; align-items: center; gap: 10px; font-size: var(--t-l, 1.25rem); }
+  .cta { display: flex; flex-wrap: wrap; gap: 10px; }
+</style>

@@ -12,7 +12,7 @@ import HeroSingleDevice from '../components/HeroSingleDevice.astro';
 import CompanionDemo from '../components/CompanionDemo.astro';
 import data from '../data/compat.json';
 import { FEATURES, TOP_SHOTS, COMPANION_SHOTS } from '../lib/gamePages.js';
-import { REPO_URL, getReleases } from '../lib/releases.js';
+import { getReleases } from '../lib/releases.js';
 import { REDDIT_URL, DISCORD_URL } from '../lib/links.js';
 import { trFor } from '../i18n/index.js';
 
@@ -22,7 +22,7 @@ const tr = trFor(Astro.url);
 const say = (x: string | [string, Record<string, string>]) => (Array.isArray(x) ? tr(x[0], x[1]) : tr(x));
 const releases = await getReleases();
 const latest = releases[0];
-const download = latest?.apk ?? `${REPO_URL}/releases/latest`;
+const download = latest?.apk ?? '/releases/';
 
 const dir = `/g/${page.slug}`;
 // Only the pictures made so far (promo_shots.py: the game frames need no app build, the app's screens do).

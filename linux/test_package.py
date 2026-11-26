@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='pd-linux-package-') as d:
         assert name+'/pokedaisy_gba_libretro.so' in names and name+'/licenses/armGBA-MPL-2.0.txt' in names
         assert b'armGBA: ' in z.read(name+'/SOURCE.txt')
         assert z.getinfo(name+'/launch.sh').external_attr>>16 & 0o111
-        assert z.read(name+'/SOURCE.txt').startswith(b'Source: https://github.com/lidor30/pokedaisy')
+        assert z.read(name+'/SOURCE.txt').startswith(b'Source: https://pokedaisy.com')
         assert not any(n.lower().endswith(('.gb','.gbc','.gba','.sav','.ss','.srm','.bin')) for n in names)
     before=archive.read_bytes()
     result=subprocess.run([sys.executable,str(script),*options,str(binary),d],capture_output=True,text=True)

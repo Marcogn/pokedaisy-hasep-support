@@ -27,8 +27,8 @@
 
     <!-- Outbound HTTPS, and co-op's own traffic (see below): library cover art (Settings > Cover Art) from SteamGridDB's
          API with a user-supplied key (Prefs.steamGridDbApiKey / SteamGridDbClient) and
-         RetroAchievements' box art; the update check against this app's GitHub releases
-         (AppUpdater: api.github.com + GitHub's download host); RetroAchievements itself
+         RetroAchievements' box art; the update check against the website's releases list
+         (AppUpdater: pokedaisy.com's list and downloads); RetroAchievements itself
          once the player signs in (achievements/RetroAchievements.kt); a BEST EFFORT match the player
          chose to SHARE (BestEffortShare: one Firestore write, the fields it showed). ASK FOR SUPPORT and
          the footer links only open a browser. Co-op (below) is the only other use. -->

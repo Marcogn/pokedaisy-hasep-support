@@ -23,7 +23,7 @@ O PokeDaisy também roda no Nintendo 3DS, como app homebrew: seu jogo roda na te
 
 ## Passo 1: baixe o app
 
-1. No computador, abra a [página de versões do PokeDaisy](https://github.com/lidor30/pokedaisy/releases).
+1. No computador, abra a [página de versões do PokeDaisy](https://pokedaisy.com/#download-3ds).
 2. Na versão mais nova que tiver um arquivo para 3DS, baixe `pokedaisy.3dsx`.
 
 ## Passo 2: copie para o cartão SD

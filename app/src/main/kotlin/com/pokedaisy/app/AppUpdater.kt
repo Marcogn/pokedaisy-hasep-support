@@ -6,15 +6,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Updates from the app's GitHub releases: the newest published release (never a
- * draft; a pre-release - a beta or rc - only with BETA UPDATES on) that carries an `.apk`
- * and whose tag is a higher version than this build's versionName. Only talks to api.github.com and GitHub's download
- * host; no account, no key.
+ * Updates from the website's releases list (`/api/releases/v1/releases.json`, GitHub's release JSON shape, written by
+ * the site's build from `website/src/data/releases.json`): the newest published release (never a draft; a pre-release
+ * - a beta or rc - only with BETA UPDATES on) that carries an `.apk` and whose tag is a higher version than this
+ * build's versionName. Only talks to pokedaisy.com; no account, no key.
  */
 object AppUpdater {
 
-    const val REPO = "lidor30/pokedaisy"
-    const val RELEASES_PAGE = "https://github.com/$REPO/releases"
+    const val SITE = "https://pokedaisy.com"
+    const val RELEASES_PAGE = "$SITE/releases/"
+    const val RELEASES_API = "$SITE/api/releases/v1/releases.json"
 
     class Release(
         val version: String,
@@ -26,17 +27,17 @@ object AppUpdater {
 
     /** The newest release that is newer than [current], or null (none, or offline); pre-releases too when [betas]. Blocking. */
     fun check(current: String, betas: Boolean = false): Release? = runCatching {
-        val conn = (URL("https://api.github.com/repos/$REPO/releases?per_page=20").openConnection() as HttpURLConnection).apply {
+        val conn = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 8000
-            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "PokeDaisy/$current")
         }
         val body = conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
         newest(JSONArray(body), betas)
     }.getOrNull()?.takeIf { isNewer(it.version, current) }
 
-    /** The highest-versioned published release with an APK in [releases] (GitHub's JSON): pre-releases count only
+    /** The highest-versioned published release with an APK in [releases] (the site's list, GitHub's JSON shape): pre-releases count only
      *  with [betas], and then a release still outranks its own betas (1.6.2 > 1.6.2-rc.2). */
     fun newest(releases: JSONArray, betas: Boolean = false): Release? {
         val found = (0 until releases.length()).mapNotNull { i ->
@@ -95,7 +96,7 @@ object AppUpdater {
     }
 
     /** Downloads [release]'s APK to [dest] (swapped in only once complete and the
-     * size GitHub reported). [onProgress] gets 0..1. Blocking. */
+     * size the list gave). [onProgress] gets 0..1. Blocking. */
     fun download(release: Release, dest: File, onProgress: (Float) -> Unit): Boolean = runCatching {
         dest.parentFile?.mkdirs()
         val tmp = File(dest.parentFile, "${dest.name}.part")

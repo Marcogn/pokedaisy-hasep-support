@@ -11,6 +11,33 @@ Two GitHub Actions workflows guard `main` and the releases:
 unit tests without the Paparazzi renders and `BestEffortTest`, its forks side by side; `make test-quick
 T='*MoneyTest'` runs one class.
 
+> [!IMPORTANT]
+> **Since 2026-11-26 releases are hosted on the website, not GitHub** (the GitHub account was suspended; the
+> workflows below can't run until it's back). A release is built on this Mac (the release skill's local recipes:
+> `make release-apk`, Linux / Windows / 3DS in Docker) and published with the site:
+> 1. `make bump V=<x.y.z>` and its WHAT'S NEW lines, as below.
+> 2. Copy every file into `website/release-files/v<x.y.z>/` (gitignored, never committed): the APK, the Linux,
+>    PortMaster, NXRedux and libretro zips, the Windows zip, `pokedaisy.3dsx`, `pokedaisy.cia` and its QR code
+>    (`qrencode -s 8 -m 3 -o pokedaisy-cia-qr.png http://dl.pokedaisy.com/v<x.y.z>/pokedaisy.cia`: plain http, since the 3DS can't check Cloudflare's ECDSA certificate), and the source
+>    archive `pokedaisy-<x.y.z>-source.tar.gz` (the tracked files, submodules listed in its `SUBMODULES.txt`). Then
+>    `cd website && node scripts/release-files.mjs v<x.y.z> --upload`: it puts them in the R2 bucket `pokedaisy-downloads`
+>    (served at dl.pokedaisy.com; `npx wrangler login` once) and records names and sizes in `src/data/release-files.json`,
+>    which the site lists (`website/src/lib/releases.js`).
+> 3. Add the release's notes at the top of `website/src/data/releases.json` (`"prerelease": true` for a beta, with its
+>    `compat.json` and `ROM_FEATURES.md` beside its files) and move `/downloads/latest/` and `/releases/latest` in
+>    `website/firebase.json`'s `redirects` to the new tag. Each release gets its own page, `/releases/<tag>/` (notes and
+>    files, `src/views/ReleasePage.astro`); GitHub's URL shapes (`/releases/tag/<tag>`, `/releases/download/<tag>/<file>`)
+>    redirect to it and to the counter.
+> 4. `cd website && npm test && npm run build`, look at it in the emulators (`firebase emulators:start --only
+>    hosting,functions,firestore --project demo-pokedaisy`, http://localhost:5055), then `firebase deploy --only
+>    hosting,functions:downloads`. The app's updater reads `/api/releases/v1/releases.json` (GitHub's release JSON shape),
+>    built from the same list. Every download link is `/dl/<tag>/<file>`, the counter (`website/functions/downloads.js`):
+>    it counts in Firestore `downloadCounts` and redirects to the file in R2; the home page shows `downloadsOnGitHub` plus that
+>    count. If GitHub hosts releases again, its live count replaces `downloadsOnGitHub`, never adds to it.
+> 5. pokedaisy.com sits behind Cloudflare (free plan, proxied to Firebase): `/dl/` must stay uncached (the function sends
+>    `no-store`); the files are R2's (dl.pokedaisy.com, cached by Cloudflare, uploaded `immutable`), never Firebase's. Every release gets new paths, so purge Cloudflare's cache only
+>    when a file under the same path changed (or pages and media after a site-only change).
+
 ## Day to day: releasing a version
 
 ```bash

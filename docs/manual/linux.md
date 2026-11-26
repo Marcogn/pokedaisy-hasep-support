@@ -15,7 +15,7 @@ install step by step, in every language the app has.
 
 > [!WARNING]
 > This is a beta. The Android app stays the full PokeDaisy, and some devices below haven't been tried yet. If
-> something goes wrong, open an issue on [GitHub](https://github.com/lidor30/pokedaisy/issues) and say which file
+> something goes wrong, [report it](https://pokedaisy.com/feedback/#bug) and say which file
 > and which device you used.
 
 ## Which file to download

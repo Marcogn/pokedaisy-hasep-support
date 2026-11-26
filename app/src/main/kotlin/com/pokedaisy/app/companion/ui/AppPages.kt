@@ -284,7 +284,8 @@ fun AppPageTitle(title: String, m: GbaTextMetrics, onBack: (() -> Unit)? = null,
 }
 
 object AppLinks {
-    const val REPO_URL = "https://github.com/lidor30/pokedaisy"
+    /** The project's home (the source and every release are there since GitHub's went, 2026-11-26). */
+    const val SITE_URL = "https://pokedaisy.com"
     const val COFFEE_URL = "https://buymeacoffee.com/lidor30g"
 }
 
@@ -306,7 +307,7 @@ fun AppAboutFooter(version: String, m: GbaTextMetrics, onOpenUrl: (String) -> Un
             GbaText("  ·  ", OptionColors.label, OptionColors.labelShadow, small)
             FooterLink("Discord", m, small, icon = { DiscordMark() }) { onOpenUrl(Discord.URL) }
             GbaText("  ·  ", OptionColors.label, OptionColors.labelShadow, small)
-            FooterLink("GitHub", m, small, icon = { GitHubMark() }) { onOpenUrl(AppLinks.REPO_URL) }
+            FooterLink("pokedaisy.com", m, small, icon = { SiteDaisy() }) { onOpenUrl(AppLinks.SITE_URL) }
         }
     }
 }

@@ -4,7 +4,7 @@
 // half with its APK one tap away; Linux and the 3DS sit under it and lead to their cards on the homepage, which
 // list every file; Windows and iOS say they're coming.
 import Pixel from './Pixel.astro';
-import { getReleases, REPO_URL } from '../lib/releases.js';
+import { getReleases } from '../lib/releases.js';
 import { downloadsFrom, formatSize } from '../lib/downloads.js';
 import { trFor, langOfPath, DEFAULT_LANG } from '../i18n/index.js';
 
@@ -32,7 +32,7 @@ const guide = (p: { guide: string; localGuide?: boolean }) =>
         <p class="small muted">{tr(android.text)}</p>
       </div>
     </div>
-    <a class="btn f-primary h-primaryHot primary big dlm-apk" href={apk.url ?? `${REPO_URL}/releases/latest`} download={apk.url ? '' : undefined}>
+    <a class="btn f-primary h-primaryHot primary big dlm-apk" href={apk.url ?? '/releases/'} download={apk.url ? '' : undefined}>
       <Pixel name="download" scale={1} /> {tr('DOWNLOAD APK')}
       {apk.version && <span class="dlm-ver">v{apk.version}{apk.size ? ` · ${formatSize(apk.size)}` : ''}</span>}
     </a>

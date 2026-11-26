@@ -7,8 +7,8 @@ import BetaModal from '../components/BetaModal.astro';
 import DownloadModal from '../components/DownloadModal.astro';
 import { frameCss, spriteSvg } from '../lib/pixel.js';
 import { THEMES, themeCss, siteDarkCss, SITE_DARK } from '../lib/themes.js';
-import { REPO_URL } from '../lib/releases.js';
-import { REDDIT_URL, DISCORD_URL, KOFI_URL, PATREON_URL, COFFEE_URL } from '../lib/links.js';
+import { getReleases } from '../lib/releases.js';
+import { GITLAB_URL, REDDIT_URL, DISCORD_URL, KOFI_URL, PATREON_URL, COFFEE_URL } from '../lib/links.js';
 import { LANGUAGES, language, localePath, stripLang, trFor, msg } from '../i18n/index.js';
 
 /**
@@ -31,6 +31,8 @@ const canonical = new URL(path, site).href;
 // The page in every language (hreflang alternates, the picker, the redirect below). A page that isn't translated
 // offers each language's home instead, and is no one's alternate.
 const here = stripLang(path);
+// The newest release's source code (the app is GPL v3): its source archive beside its files.
+const source = (await getReleases())[0]?.assets.find((a) => a.name.endsWith('-source.tar.gz'));
 const versions = LANGUAGES.map((l) => ({ ...l, href: paths ? (paths[l.code] ?? localePath(l.code, '/')) : localePath(l.code, wholeSite ? here : '/') }));
 // Only the languages the page itself comes in are its alternates.
 const alternates = paths ? versions.filter((l) => paths[l.code]) : wholeSite ? versions : [];
@@ -177,12 +179,12 @@ const petals = [[4, 22, 1, 0, 22], [91, 10, 2, 4, 26], [70, 62, 1, 9, 24], [10, 
             <a href={tr.path(href)} aria-current={here === href || (href === '/docs/' && path.startsWith('/docs/')) ? 'page' : undefined}>{tr(label)}</a>
           ))}
         </nav>
-        <!-- The source and the page's look, beside the links (on phones: on the first row, the links under it). -->
+        <!-- The code and the page's look, beside the links (on phones: on the first row, the links under it). -->
         <div class="bar-tools">
-          <a href={REPO_URL} class="icon-link gh-top" aria-label="GitHub"><Pixel name="github" scale={0.75} /></a>
+          <a href={GITLAB_URL} class="icon-link" aria-label="GitLab" title="GitLab"><Pixel name="gitlab" scale={0.6} /></a>
           <button type="button" class="icon-link scheme-btn" data-scheme-toggle aria-label={tr('Dark mode')} title={tr('Dark mode')} aria-pressed="false">
-            <span class="to-dark"><Pixel name="moon" scale={0.75} /></span>
-            <span class="to-light"><Pixel name="sun" scale={0.75} /></span>
+            <span class="to-dark"><Pixel name="moon" scale={0.6} /></span>
+            <span class="to-light"><Pixel name="sun" scale={0.6} /></span>
           </button>
         </div>
         <a class="btn f-coffee h-coffeeHot small coffee-nav" href={COFFEE_URL} aria-label={tr('BUY ME A COFFEE')}>
@@ -221,12 +223,14 @@ const petals = [[4, 22, 1, 0, 22], [91, 10, 2, 4, 26], [70, 62, 1, 9, 24], [10, 
           </div>
         </div>
         <div class="foot-links tiny">
-          <a href={`${REPO_URL}/releases/latest`} data-download-open>{tr('DOWNLOAD')}</a>
+          <a href={tr.path('/releases/')} data-download-open>{tr('DOWNLOAD')}</a>
           <a href="/docs/">{tr('DOCS')}</a>
           <a href={tr.path('/compatibility/')}>{tr('ROM CHECK')}</a>
           <a href={tr.path('/releases/')}>{tr('RELEASES')}</a>
           <a href={tr.path('/feedback/#bug')}>{tr('REPORT A BUG')}</a>
-          <a href={REPO_URL}>GITHUB</a>
+          <a href="/contact/">{tr('CONTACT')}</a>
+          <a href="/docs/legal/">{tr('LEGAL')}</a>
+          {source && <a href={source.url}>{tr('SOURCE CODE')}</a>}
           <a href={REDDIT_URL}>REDDIT</a>
           <a href={DISCORD_URL}>DISCORD</a>
           <a href={KOFI_URL}>KO-FI</a>
@@ -346,7 +350,7 @@ const petals = [[4, 22, 1, 0, 22], [91, 10, 2, 4, 26], [70, 62, 1, 9, 24], [10, 
     --line: rgba(29, 27, 38, 0.12);
   }
   /* Between the two-row layout and a wide window, a tighter nav: the longest language's labels (German, Spanish),
-     GitHub, the light switch, the coffee button and the language picker then fit in one row from 1100px up. */
+     GitLab, the light switch, the coffee button and the language picker then fit in one row from 1100px up. */
   @media (min-width: 1101px) and (max-width: 1260px) {
     .topbar .bar { gap: 14px; }
     .topbar .links { font-size: var(--t-xs); gap: 0; }
@@ -445,7 +449,6 @@ const petals = [[4, 22, 1, 0, 22], [91, 10, 2, 4, 26], [70, 62, 1, 9, 24], [10, 
   :root[data-scheme='dark'] .scheme-btn .to-light { display: inline-flex; }
   /* A page with a game's own look keeps it: no switch there. */
   :root[data-theme] .scheme-btn { display: none; }
-  :root[data-scheme='dark']:not([data-theme]) .gh-top .pixel { filter: brightness(0) invert(0.95); }
 
   /* Language picker: a small chip; its list drops down under it, a pixel card. */
   .lang-pick { position: relative; }
@@ -471,7 +474,7 @@ const petals = [[4, 22, 1, 0, 22], [91, 10, 2, 4, 26], [70, 62, 1, 9, 24], [10, 
     .links a { white-space: nowrap; }
     .bar-tools { margin-left: auto; }
   }
-  /* Phones: the name, GitHub, the light switch, the coffee cup and the language on one row. */
+  /* Phones: the name, GitLab, the light switch, the coffee cup and the language on one row. */
   @media (max-width: 440px) {
     .topbar .bar { column-gap: 6px; }
     .brand { gap: 8px; font-size: var(--t-m); }

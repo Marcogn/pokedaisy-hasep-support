@@ -1,0 +1,67 @@
+{
+  "_comment": "Each release's files in the R2 bucket (dl.pokedaisy.com/<tag>/<file>): names, sizes and SHA-256, written by scripts/release-files.mjs.",
+  "releases": {
+    "v1.6.2.2": [
+      {
+        "name": "PokeDaisy-1.6.2.2-windows-x86_64.zip",
+        "size": 13924646,
+        "sha256": "7be806b5898be0b03da09e29f316e31963270c07d481949109a64bee970524c3"
+      },
+      {
+        "name": "PokeDaisy-1.6.2.2.apk",
+        "size": 50088593,
+        "sha256": "787515519005bfd3af1e2652cb777af48043ce4757d7c690fcb07eda53eb3cc3"
+      },
+      {
+        "name": "PokeDaisy-NXRedux.zip",
+        "size": 9960869,
+        "sha256": "b4a66bddfd81e50d140a34dbb62747546e1b499c9bb2bed7122887d72668dc8d"
+      },
+      {
+        "name": "pokedaisy-1.6.2.2-source.tar.gz",
+        "size": 61777720,
+        "sha256": "e3fe2448cfd05ef43555c23d40c200ccb2244053a796dfc94bb79b670ec98f08"
+      },
+      {
+        "name": "pokedaisy-cia-qr.png",
+        "size": 384,
+        "sha256": "cd482bda95e08201208e9013ef85d4ae47fb81bfe6a660301685424f11c0cfec"
+      },
+      {
+        "name": "pokedaisy-libretro-aarch64.zip",
+        "size": 9952543,
+        "sha256": "3f8c50dc94b5ea8452e758f96fad07029c0f7a89af2c894940a818d58e8d5c06"
+      },
+      {
+        "name": "pokedaisy-libretro-x86_64.zip",
+        "size": 10145461,
+        "sha256": "81e497df24488cf15c0d426d521221bd1ee931961b0d0f094b1aed9475669f5a"
+      },
+      {
+        "name": "pokedaisy-linux-aarch64.zip",
+        "size": 15260047,
+        "sha256": "885c3c54d01103d4731ee5f8505e3fda111ff8f5d70cf2bf0ce25b7ce304560a"
+      },
+      {
+        "name": "pokedaisy-linux-x86_64.zip",
+        "size": 12432173,
+        "sha256": "7186c5e32e0a1721b8d27d81123dddb2b744dcf61ae4de9c9245665bad9223d6"
+      },
+      {
+        "name": "pokedaisy-portmaster-aarch64.zip",
+        "size": 15303993,
+        "sha256": "6fda4a7a5b8af3e61a2f2ad085d7370c9c1e15dcb4d5d775362d065dbad8da67"
+      },
+      {
+        "name": "pokedaisy.3dsx",
+        "size": 6606536,
+        "sha256": "8680b1f9ea0d3f02885276f0602720c5fbd84053139059445443cc73f1f62535"
+      },
+      {
+        "name": "pokedaisy.cia",
+        "size": 3554240,
+        "sha256": "882537827ac923d2fc00a1df5a69e9b8eb498ba143e6d9b9260118ff9382a861"
+      }
+    ]
+  }
+}

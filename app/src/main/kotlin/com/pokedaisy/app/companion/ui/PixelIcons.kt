@@ -825,10 +825,10 @@ fun PatreonMark(modifier: Modifier = Modifier) = PixelArt(
     modifier.fillMaxSize(),
 )
 
-/** [PixelIcons.github] in GitHub's near-black, beside the repo link. */
+/** [PixelIcons.daisy] in the value red with a gold heart, beside the website's link. */
 @Composable
-fun GitHubMark(modifier: Modifier = Modifier) =
-    PixelIcon(PixelIcons.github, if (OptionColors.dark) Color(0xFFD8DCE4) else Color(0xFF202020), modifier.fillMaxSize())
+fun SiteDaisy(modifier: Modifier = Modifier) =
+    PixelArt(PixelIcons.daisy, mapOf('P' to OptionColors.value, 'C' to OptionColors.favorite), modifier.fillMaxSize())
 
 /** [PixelIcons.discord] in Discord's blurple, beside its row and link. */
 @Composable

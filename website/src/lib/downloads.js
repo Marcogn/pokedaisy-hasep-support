@@ -43,7 +43,7 @@ export const PLATFORMS = [
       { match: (n) => /^PokeDaisy-.+-windows-x86_64\.zip$/.test(n), icon: 'desktop', label: msg('Windows PCs') },
     ],
   },
-  { id: 'ios', name: 'IOS', icon: 'iphone', soon: true, files: [] },
+  { id: 'ios', name: 'iOS', icon: 'iphone', soon: true, files: [] },
 ];
 
 const matches = (file, name) => (typeof file.match === 'string' ? file.match === name : file.match(name));

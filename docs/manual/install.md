@@ -6,12 +6,12 @@ order: 2
 keywords: [download, apk, sideload, 32-bit, armv7, older tablet, setup, first time, onboarding, permission, storage, update, upgrade, new version, unknown sources, wizard]
 ---
 
-PokeDaisy isn't on the Play Store. You install it from its GitHub page as an APK file, and the app then keeps itself up to date. The whole thing takes a few minutes.
+PokeDaisy isn't on the Play Store. You install it from [its website](https://pokedaisy.com/) as an APK file, and the app then keeps itself up to date. The whole thing takes a few minutes.
 
 ## Download and install the APK
 
-1. On the device, open the [latest release](https://github.com/lidor30/pokedaisy/releases/latest) in a browser.
-2. Under **Assets**, tap `PokeDaisy-<version>.apk` to download it. The same file works on every device, including older tablets running a 32-bit Android.
+1. On the device, open the [Android download on PokeDaisy's site](https://pokedaisy.com/#download-android) in a browser.
+2. Tap `PokeDaisy-<version>.apk` to download it. The same file works on every device, including older tablets running a 32-bit Android.
 3. Open the downloaded file (from the browser's download notice, or your file manager's Downloads folder).
 4. If Android says it isn't allowed to install apps from this source, tap through to its settings, allow it for your browser or file manager, and go back. Then tap **Install**.
 5. Open PokeDaisy.
@@ -99,12 +99,12 @@ Then pick a game and play. [Your game library](library.md) is the next page.
 PokeDaisy checks for a new version each time you open the library. When there is one, it shows `UPDATE AVAILABLE` with what's new:
 
 - `UPDATE` downloads the new APK and opens Android's installer. Tap **Update** there. If Android asks to allow installs from PokeDaisy, allow it and go back.
-- `RELEASE PAGE` opens the release on GitHub.
+- `RELEASE PAGE` opens the release on PokeDaisy's releases page.
 - `LATER` puts it off until the next time you open the library.
 
 Updating keeps everything: your library, saves, states and settings.
 
-The first time you open the library after an update, `WHAT'S NEW` shows the main changes in that version, once. `RELEASE PAGE` opens the full notes on GitHub and `OK` closes it.
+The first time you open the library after an update, `WHAT'S NEW` shows the main changes in that version, once. `RELEASE PAGE` opens the full notes on the website and `OK` closes it.
 
 ![The UPDATE AVAILABLE window in the library, with release notes and LATER, RELEASE PAGE and UPDATE buttons](shots/library-update.png "An update offer")
 

@@ -21,7 +21,7 @@ PokeDaisy는 Linux에서도 실행돼요. Steam Deck, Linux PC, TrimUI 같은 Li
 
 ## 어떤 파일을 내려받나요
 
-[PokeDaisy 릴리스 페이지](https://github.com/lidor30/pokedaisy/releases)를 열고, Linux 파일이 있는 가장 새로운 릴리스에서 내 기기에 맞는 파일을 내려받아요:
+[PokeDaisy 릴리스 페이지](https://pokedaisy.com/#download-linux)를 열고, Linux 파일이 있는 가장 새로운 릴리스에서 내 기기에 맞는 파일을 내려받아요:
 
 | 내 기기 | 내려받을 파일 |
 | --- | --- |

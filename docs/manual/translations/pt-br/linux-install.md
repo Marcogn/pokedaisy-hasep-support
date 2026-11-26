@@ -17,7 +17,7 @@ O PokeDaisy também roda no Linux: em um Steam Deck, em um PC com Linux e em por
 
 ## Qual arquivo baixar
 
-Abra a [página de versões do PokeDaisy](https://github.com/lidor30/pokedaisy/releases) e, na versão mais nova que tiver arquivos para Linux, baixe o do seu aparelho:
+Abra a [página de versões do PokeDaisy](https://pokedaisy.com/#download-linux) e, na versão mais nova que tiver arquivos para Linux, baixe o do seu aparelho:
 
 | Seu aparelho | Download |
 | --- | --- |

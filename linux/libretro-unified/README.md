@@ -1,6 +1,6 @@
 # PokéDaisy collection for NXRedux
 
-Based on PokeDaisy by Lidor Itzhari - https://github.com/lidor30/pokedaisy
+Based on PokeDaisy by Lidor Itzhari - https://pokedaisy.com
 
 The TrimUI Brick package puts three native libretro cores behind one collection.
 NXRedux chooses armGBA (`pokedaisy_gba`) for `.gba`, mGBA (`pokedaisy_gbc`) for `.gb` and `.gbc`, and DSperate

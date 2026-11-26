@@ -2,11 +2,13 @@
 // language (src/i18n) is listed once per language, each naming the others (hreflang), as the pages' <head> does.
 import { loadDocs, loadTranslations } from '../lib/docs.js';
 import { GAME_PAGES } from '../lib/gamePages.js';
+import { getReleases, releasePath } from '../lib/releases.js';
 import { LANGUAGES, localePath } from '../i18n/index.js';
 
-export function GET({ site }) {
+export async function GET({ site }) {
   const base = String(site ?? 'https://pokedaisy.com').replace(/\/$/, '');
-  const localized = ['/', '/compatibility/', '/releases/', '/feedback/', ...GAME_PAGES.map((g) => `/g/${g.slug}/`)];
+  const localized = ['/', '/compatibility/', '/releases/', '/feedback/', ...GAME_PAGES.map((g) => `/g/${g.slug}/`),
+    ...(await getReleases()).map((r) => releasePath(r.tag))];
   const docs = loadDocs();
   const { bySlug } = loadTranslations(docs);
   // A docs page with translations (docs/manual/translations) is listed in each of its languages, naming the others.

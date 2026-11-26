@@ -87,7 +87,6 @@ import com.pokedaisy.app.companion.ui.CoffeeCup
 import com.pokedaisy.app.companion.ui.DiscordMark
 import com.pokedaisy.app.companion.Discord
 import com.pokedaisy.app.companion.ui.GbaText
-import com.pokedaisy.app.companion.ui.GitHubMark
 import com.pokedaisy.app.companion.ui.GoldTrophy
 import com.pokedaisy.app.companion.ui.GroupedRows
 import com.pokedaisy.app.companion.ui.filterRows
@@ -984,9 +983,9 @@ class SettingsActivity : ComponentActivity() {
             // The on-screen buttons: when they show, layouts, size, extras, EDIT LAYOUT; the game picks it up on resume.
             SettingRow(tk("TOUCH CONTROLS"), prefs.touchControlsStyle.show.label, labelBadge = com.pokedaisy.app.companion.ui.touchControlsBadge(), opensPage = true, subtitle = "The on-screen buttons: layout, look, skins") { screen = Screen.TOUCH },
             groupTitle(tk("APP")),
-            // Tap: look for a newer release on GitHub now.
+            // Tap: look for a newer release on the website now.
             SettingRow(tk("VERSION"), if (updates.checking) tk("CHECKING…") else BuildConfig.VERSION_NAME) { updates.check(manual = true) },
-            // The updater offers betas and release candidates too (GitHub pre-releases); turning it on looks at once.
+            // The updater offers betas and release candidates too (the website's pre-releases); turning it on looks at once.
             run {
                 val beta = prefs.betaUpdates(runningBeta = '-' in BuildConfig.VERSION_NAME)
                 SettingRow(
@@ -1691,7 +1690,7 @@ class SettingsActivity : ComponentActivity() {
     private fun LicensesScreen(m: GbaTextMetrics, small: GbaTextMetrics) {
         val parts = remember {
             val text = runCatching { assets.open("licenses.txt").use { it.readBytes().decodeToString() } }.getOrNull()
-                ?: "=== PokeDaisy\n\nGNU GPL v3 - https://github.com/lidor30/pokedaisy"
+                ?: "=== PokeDaisy\n\nGNU GPL v3 - https://pokedaisy.com"
             text.split(Regex("(?m)^=== ")).filter { it.isNotBlank() }.map { part ->
                 val title = part.substringBefore('\n').trim()
                 // Paragraphs reflowed: the license files are hard-wrapped at ~70 columns.
@@ -2282,7 +2281,7 @@ class SettingsActivity : ComponentActivity() {
     companion object {
         private val FOLDER_PAGES = setOf(Screen.ROMS_FOLDERS, Screen.SAVES_FOLDER, Screen.SAVE_SEARCH, Screen.STATES_FOLDER, Screen.BACKUPS)
         val RATES = floatArrayOf(0f, 1.5f, 2f, 3f, 4f, 5f, 6f, 8f, 10f)
-        const val REPO_URL = com.pokedaisy.app.companion.ui.AppLinks.REPO_URL
+        const val SITE_URL = com.pokedaisy.app.companion.ui.AppLinks.SITE_URL
         /** A ROM path: open straight on that game's CHEATS (its library menu). */
         const val EXTRA_CHEATS_ROM = "cheats_rom"
         /** Opens one page alone ([SCREEN_HELP]: the manual); BACK finishes. */
