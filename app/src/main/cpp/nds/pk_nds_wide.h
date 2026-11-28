@@ -15,8 +15,11 @@
 namespace melonDS { class NDS; }
 
 /** The widest margins, in DS pixels: left / right and above / below. A slice is a screen less its overlap with the
- * screen, so up to 252 / 188 (less SPARE); the 3x zoom step needs 192 / 84 on the Thor (640 x 360), 242 on a 20:9 phone. */
-constexpr int PK_NDS_WIDE_MAX_MARGIN_X = 248;
+ * screen, 252 / 188: the left / right margin spans two slices on each side, so it reaches 504. That is a 1264-pixel
+ * canvas (6.6:1), past three 1080p monitors (5760 x 1080 makes a 1024-pixel canvas; its client area with a title bar
+ * and borders is a little wider still), so EXPAND's field reaches a window laid across them with no bars at the sides.
+ * The 3x zoom step needs 192 / 84 on the Thor (640 x 360), 242 on a 20:9 phone. */
+constexpr int PK_NDS_WIDE_MAX_MARGIN_X = 504;
 constexpr int PK_NDS_WIDE_MAX_MARGIN_Y = 96;
 constexpr int PK_NDS_WIDE_MAX_W = 256 + 2 * PK_NDS_WIDE_MAX_MARGIN_X;
 constexpr int PK_NDS_WIDE_MAX_H = 192 + 2 * PK_NDS_WIDE_MAX_MARGIN_Y;
@@ -86,6 +89,9 @@ const melonDS::WidePolygonList* pk_nds_wide_gpu_list();
  * built. */
 void pk_nds_wide_gpu_want(bool threeD);
 
+/** EXPAND's margins draw another area's untextured ground in the field's colour (HeartGold / SoulSilver, Platinum). */
+void pk_nds_wide_ground_fill(bool on);
+
 /** A margin pixel's plan, the word's top byte: PLAN_COLOR = its colour as is (RGB in the low bytes); PLAN_3D / PLAN_3D_OVER
  * = the 3D there, put on the screen as the 2D engine would (alone, or under the 2D colour in the low bytes - 6 bits a
  * channel - blended by BLDCNT); PLAN_SCREEN = the screen's own pixel at (low byte | bit 16's 256, byte 1); PLAN_3D_ON =
@@ -108,3 +114,16 @@ struct PkNdsWidePlan {
     uint32_t fxTargets = 0;    // its first targets: 1 the 3D, 0x20 the backdrop
 };
 void pk_nds_wide_plan(PkNdsWidePlan* out);
+
+/** EXPAND's margins at a hires renderer's scale (BananaDS's Gengis at render.scale 2-4): [draw] draws a slice's polygons
+ * ([n] of them, set up in the slice's own screen as for melonDS's software renderer) into [out], (256 * scale) x
+ * (192 * scale) words in the 3D engine's colours (r | g << 8 | b << 16 | alpha << 24, 6 / 5 bits), on EXPAND's helper
+ * threads; [slot] is the slice (0-8, (sy + 1) * 3 + sx + 1). Returns whether it drew. Set, the margins are composed
+ * as GPU mode's plan (pk_nds_wide_plan) for the caller to put the hires 3D into; scale < 2 or null: as before.
+ * Between frames. */
+namespace melonDS { struct Polygon; }
+typedef bool (*PkNdsHiresDraw)(void* user, int slot, melonDS::Polygon** polys, int n, uint32_t* out);
+void pk_nds_wide_hires(int scale, PkNdsHiresDraw draw, void* user);
+
+/** The hires picture of slice (sx, sy) (-1..1 each) the last composed frame used, or null. */
+const uint32_t* pk_nds_wide_hires_slice(int sx, int sy);

@@ -1,0 +1,12 @@
+---
+// BETA after a game only the newest beta reads (beta.js): a tap opens how to get it (BetaModal.astro).
+import { trFor } from '../i18n/index.js';
+
+const tr = trFor(Astro.url);
+---
+<button type="button" class="chip f-pillYellow beta-tag" data-beta-open title={tr('GET THE BETA')}>BETA</button>
+
+<style is:global>
+  .beta-tag { font-family: var(--font-pixel); font-size: var(--t-xs); margin-left: 8px; padding: 0 8px; cursor: pointer; color: var(--ink); background: none; vertical-align: 1px; }
+  .beta-tag:hover { transform: translateY(calc(var(--px) * -1)); }
+</style>

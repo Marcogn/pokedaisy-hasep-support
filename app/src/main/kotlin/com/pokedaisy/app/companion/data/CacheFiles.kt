@@ -30,8 +30,16 @@ fun Path.readText(): String = FileSystem.SYSTEM.read(this) { readUtf8() }
 /** The lines without their ends, as File.readLines() (no empty last line after a final newline). */
 fun Path.readLines(): List<String> = FileSystem.SYSTEM.read(this) { generateSequence { readUtf8Line() }.toList() }
 
-/** Creates the directory and its parents; quiet when it's there. */
-fun Path.mkdirs() = FileSystem.SYSTEM.createDirectories(this)
+/** Creates the directory and its parents, as File.mkdirs(): true when it's there afterwards, false (never a throw)
+ * when it can't be made. okio's createDirectories throws there, and 1.6.2 crashed opening every game on an RG Rotate
+ * whose `Android/data/<app>` folder Android hadn't made (getExternalFilesDir hands the path back anyway): the states'
+ * folder threw in StateFiles' init, where File.mkdirs had only said false. A write into it still throws as before. */
+fun Path.mkdirs(): Boolean = try {
+    FileSystem.SYSTEM.createDirectories(this)
+    true
+} catch (_: okio.IOException) {
+    false
+}
 
 /** Writes [bytes] here, creating the parent directories. */
 fun Path.writeBytes(bytes: ByteArray) {

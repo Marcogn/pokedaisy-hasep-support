@@ -1,0 +1,40 @@
+---
+// Step-by-step setup guides kept as Markdown beside the code (docs/es-de, docs/iisu): they're full of XML / JSON to
+// copy, which the manual's pages don't draw (docs.js has no code blocks), so they're their own pages, in English. The
+// manual's "Launching from a frontend" links here.
+import Base from '../../layouts/Base.astro';
+import * as esde from '../../../../docs/es-de/README.md';
+import * as iisu from '../../../../docs/iisu/README.md';
+
+const GUIDES = {
+  'es-de': { md: esde, title: 'Launch PokeDaisy from ES-DE', description: 'Add PokeDaisy to ES-DE as a GBA emulator, so a game opens straight in PokeDaisy.' },
+  iisu: { md: iisu, title: 'Launch PokeDaisy from iiSU', description: "Add PokeDaisy to iiSU's emulator list and pick it for the games you want." },
+};
+
+export function getStaticPaths() {
+  return [{ params: { guide: 'es-de' } }, { params: { guide: 'iisu' } }];
+}
+
+const g = GUIDES[Astro.params.guide as keyof typeof GUIDES];
+const { Content } = g.md;
+---
+<Base title={`${g.title} · PokeDaisy`} description={g.description} localized={false}>
+  <section class="block container narrow">
+    <article class="guide f-card" lang="en">
+      <p class="crumb"><a href="/docs/library/#launching-from-a-frontend">DOCS</a></p>
+      <Content />
+    </article>
+  </section>
+</Base>
+
+<style>
+  .narrow { max-width: 900px; }
+  .guide { padding: calc(var(--px) * 9); display: grid; gap: 14px; font-family: var(--font-read); line-height: 1.55; color: var(--ink-2); overflow-wrap: anywhere; }
+  .crumb { font-family: var(--font-pixel); }
+  .guide :global(h1), .guide :global(h2), .guide :global(h3) { font-family: var(--font-pixel); color: var(--ink); line-height: 1.3; margin-top: 8px; }
+  .guide :global(pre) { overflow-x: auto; padding: 12px 14px; font-size: 0.85rem; line-height: 1.45; }
+  .guide :global(code) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+  .guide :global(ol), .guide :global(ul) { padding-left: 1.4em; display: grid; gap: 6px; }
+  .guide :global(table) { border-collapse: collapse; }
+  .guide :global(td), .guide :global(th) { border: var(--px) solid var(--line); padding: 4px 8px; }
+</style>

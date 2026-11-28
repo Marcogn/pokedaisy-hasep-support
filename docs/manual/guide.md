@@ -106,4 +106,4 @@ The first time you open the GUIDE in a game, a `BEFORE YOU READ` window comes up
 HERE, NEXT BOSS and EVOLUTIONS are read straight from your game, so they match what's in your ROM. Tap `I UNDERSTAND` to carry on (it's only asked once per game) or `GO BACK` to return to the tab you came from.
 
 > [!NOTE]
-> Spotted a mistake in a guide? Report it on the [feedback page](https://pokedaisy.com/feedback/) (no GitHub account needed), and say which game and which entry.
+> Spotted a mistake in a guide? Report it on the [feedback page](https://pokedaisy.com/feedback/) (no account needed), and say which game and which entry.

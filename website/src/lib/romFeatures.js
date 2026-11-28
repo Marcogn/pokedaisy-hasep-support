@@ -83,6 +83,10 @@ const ALIASES = {
   'Moemon Quetzal': ['Quetzal, Moemon Quetzal'],
   // The Hasep fork's own game (docs/HASEP_FORK.md): README names it, ROM_FEATURES.md keeps it short.
   'Hasep (Heart and Soul fork)': ['Hasep'],
+  'Sacred Gold (DS)': ['Sacred Gold (DS), Storm Silver (DS)'],
+  'Storm Silver (DS)': ['Sacred Gold (DS), Storm Silver (DS)'],
+  'Elysium (Part A)': ['Elysium (Part A), Elysium (Part B)'],
+  'Elysium (Part B)': ['Elysium (Part A), Elysium (Part B)'],
 };
 /**
  * Rows no games-table game owns: hacks the app proves by their code (never listed by name), and Emerald Kaizo,

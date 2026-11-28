@@ -1,0 +1,10 @@
+---
+// A release's own page (src/views/ReleasePage.astro), drawn in every language (src/pages/[lang]/releases/ has the others).
+import ReleasePage from '../../views/ReleasePage.astro';
+import { getReleases } from '../../lib/releases.js';
+
+export async function getStaticPaths() {
+  return (await getReleases()).map((r) => ({ params: { tag: r.tag }, props: { tag: r.tag } }));
+}
+---
+<ReleasePage tag={Astro.props.tag} />

@@ -17,7 +17,7 @@ O PokeDaisy também roda no Linux: em um Steam Deck, em um PC com Linux e em por
 
 ## Qual arquivo baixar
 
-Abra a [página de versões do PokeDaisy](https://github.com/lidor30/pokedaisy/releases) e, na versão mais nova que tiver arquivos para Linux, baixe o do seu aparelho:
+Abra a [página de versões do PokeDaisy](https://pokedaisy.com/#download-linux) e, na versão mais nova que tiver arquivos para Linux, baixe o do seu aparelho:
 
 | Seu aparelho | Download |
 | --- | --- |
@@ -63,8 +63,8 @@ O app guarda tudo na própria pasta e roda em tela cheia. No CrossMix, ele aumen
 ## Portáteis com PortMaster
 
 1. Extraia `pokedaisy-portmaster-aarch64.zip` no computador. Dentro dele estão `PokeDaisy.sh` e uma pasta `pokedaisy`.
-2. Copie os dois para a pasta `ports` do seu firmware no cartão SD.
-3. Seus jogos podem ficar onde estão: a lista de jogos mostra `ports/pokedaisy/roms` e as pastas `gba`, `gb`, `gbc` e `nds` do próprio firmware (e as chamadas `Game Boy Advance`, `Game Boy Color`, `Game Boy` e `Nintendo DS`).
+2. Copie os dois para a pasta `ports` do seu firmware no cartão SD. No muOS eles vão para duas pastas: `PokeDaisy.sh` para `ROMS/Ports` e a pasta `pokedaisy` para `ports`, as duas na raiz do cartão.
+3. Seus jogos podem ficar onde estão: a lista de jogos mostra `ports/pokedaisy/roms` e as pastas `gba`, `gb`, `gbc` e `nds` do próprio firmware (e as chamadas `Game Boy Advance`, `Game Boy Color`, `Game Boy` e `Nintendo DS`), na raiz do cartão ou na pasta `ROMS` dele (muOS: `ROMS/GBA`).
 4. Abra o PokeDaisy pela lista Ports.
 
 O PortMaster informa ao PokeDaisy os botões do seu aparelho, então eles funcionam sem configurar nada. O botão Menu ou Guide abre o menu do PokeDaisy, e SELECT e START juntos saem, como em qualquer port. Ele já foi jogado em um GKD 350H com ROCKNIX.

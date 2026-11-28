@@ -29,6 +29,7 @@
 #include <AREngine.h>
 
 #include <android/log.h>
+#include <android/native_window.h>
 
 #include <algorithm>
 #include <atomic>
@@ -46,6 +47,10 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 using namespace melonDS;
+
+extern "C" {
+static void expShareTick(void);   // EXP SHARE, after every frame (below; the definition is in the C API block)
+}
 
 namespace {
 
@@ -75,6 +80,9 @@ struct Ds {
     int fieldBits = 0;                       // the field read after the last frame
     bool wildOff = false;                    // WILD ENCOUNTERS OFF (pk_nds_field.cpp holds the map's rates at 0)
     bool keepStartMenu = false;              // DS LAYOUT floats the X menu: it comes back after a screen left by touch
+    int expShare = 0;                        // EXP SHARE: 0 off, 1 SPLIT, 2 FULL EXP (expShareTick)
+    uint32_t expMask = 0;                    // the party slots that aren't eggs (sideGetExpMask's bits)
+    bool expPatched = false;                 // FULL EXP's patch is ours, so taking it out puts the game's back
     bool cpuBoost = false;                   // DS CPU BOOST: the ARM9 at twice the DS's clock (setArm9Shift)
     int menuLitFrames = 0;                   // frames this menu screen has been lit (its closing fade comes after)
     int scaleWant = 1;                       // DS RESOLUTION: 1 = the software renderer, 2-8 the GPU's (pk_nds_gl.h)
@@ -283,6 +291,27 @@ void pk_ndsm_deinit(void)
 
 bool pk_ndsm_active(void) { return ds != nullptr; }
 
+const uint8_t* pk_ndsm_save_data(void)
+{
+    return ds && ds->nds ? ds->nds->GetNDSSave() : nullptr;
+}
+
+uint32_t pk_ndsm_save_length(void)
+{
+    return ds && ds->nds ? ds->nds->GetNDSSaveLength() : 0;
+}
+
+// melonDS's main RAM: the DS companion reads the save out of it (android's companion does the same).
+const uint8_t* pk_ndsm_main_ram(void)
+{
+    return ds && ds->nds ? ds->nds->MainRAM : nullptr;
+}
+
+uint32_t pk_ndsm_main_ram_size(void)
+{
+    return ds && ds->nds ? ds->nds->MainRAMMask + 1 : 0;
+}
+
 void pk_ndsm_set_keys(uint32_t keys)
 {
     if (ds) ds->keys = keys & 0xFFF;
@@ -294,6 +323,9 @@ void pk_ndsm_touch(bool down, int x, int y)
     u32 cy = y < 0 ? 0 : y > PK_NDS_H - 1 ? PK_NDS_H - 1 : y;
     touch.store((down ? 0x80000000u : 0u) | (cx << 8) | cy);
 }
+
+static uint32_t mainRead32(uint32_t addr);
+static void mainWrite32(uint32_t addr, uint32_t v);
 
 void pk_ndsm_run_frame(void)
 {
@@ -321,7 +353,14 @@ void pk_ndsm_run_frame(void)
     ds->drawn = draw;
     nds->GPU.SkipDraw = !draw;
     nds->GPU.SkipDrawNext = !drawNext;
+    // EXPAND: another area's map chunk keeps its props to itself for the frame (pk_nds_field_foreign_props)
+    // Only from the field (the last frame's read): a battle or a menu app may have freed the map chunks.
+    if (ds->wide && (ds->fieldBits & PK_NDS_FIELD_SCREEN) && !(ds->fieldBits & (PK_NDS_FIELD_MENU | PK_NDS_FIELD_BATTLE)))
+        pk_nds_field_foreign_props(ds->field, mainRead32, mainWrite32, 1);
+    // ...and the margins' ground fill (pk_nds_wide.cpp), tried on HeartGold / SoulSilver and Platinum only.
+    pk_nds_wide_ground_fill(ds->field && ds->field->gen == 0);
     nds->RunFrame();
+    pk_nds_field_foreign_props(ds->field, mainRead32, mainWrite32, 0);
     int fb = nds->GPU.FrontBuffer;
     // GPU mode: the framebuffers hold the 2D lines for the compositor; the screens come from it (below).
     if (draw && !gpu) {
@@ -330,6 +369,7 @@ void pk_ndsm_run_frame(void)
     }
     ds->audioFrames = nds->SPU.ReadOutput(ds->audio.data(), (int) ds->audio.size() / 2);
     ds->fieldBits = pk_ndsm_field_bits();
+    expShareTick();
     pk_nds_call_frame(nds, ds->field);
     if (ds->wide) {
         // The overworld only: the field map on screen with nothing over it (a text box keeps it) - or a battle that's
@@ -398,9 +438,9 @@ int pk_ndsm_finish_save(int maxFrames)
     return n;
 }
 
-bool pk_ndsm_save_state(const char* path)
+// A state as its file holds it: the header (magic, version, the save's CRC and length), then melonDS's own.
+static bool stateBytes(std::vector<u8>& out)
 {
-    if (!ds) return false;
     Savestate st;
     pk_nds_wide_sync();
     setArm9Shift(1);
@@ -411,11 +451,85 @@ bool pk_ndsm_save_state(const char* path)
     const u8* save = ds->nds->GetNDSSave();
     u32 saveLen = ds->nds->GetNDSSaveLength();
     u32 header[4] = {STATE_MAGIC, STATE_VERSION, save ? saveCrc(save, saveLen) : 0, saveLen};
+    out.resize(sizeof(header) + st.Length());
+    memcpy(out.data(), header, sizeof(header));
+    memcpy(out.data() + sizeof(header), st.Buffer(), st.Length());
+    return true;
+}
+
+bool pk_ndsm_save_state(const char* path)
+{
+    if (!ds) return false;
+    std::vector<u8> bytes;
+    if (!stateBytes(bytes)) return false;
     FILE* f = fopen(path, "wb");
     if (!f) return false;
-    bool ok = fwrite(header, sizeof(header), 1, f) == 1 && fwrite(st.Buffer(), 1, st.Length(), f) == st.Length();
+    bool ok = fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
     ok = fclose(f) == 0 && ok;
     return ok;
+}
+
+size_t pk_ndsm_state_mem(uint8_t* out, size_t cap)
+{
+    if (!ds) return 0;
+    std::vector<u8> bytes;
+    if (!stateBytes(bytes)) return 0;
+    if (out) {
+        if (bytes.size() > cap) return 0;
+        memcpy(out, bytes.data(), bytes.size());
+    }
+    return bytes.size();
+}
+
+// [keepSave]: the battery save the console holds now stays (a libretro frontend's state, REWIND, the quick menu's LOAD
+// STATE: the frontend owns the save file); else the state's copy goes back, and to the file, as the app's states do.
+static bool loadStateBytes(const u8* data, size_t len, bool keepSave)
+{
+    if (!data || len < 16) return false;
+    u32 header[4];
+    memcpy(header, data, sizeof(header));
+    if (header[0] != STATE_MAGIC) return false;
+    std::vector<u8> battery, copy;
+    bool dirty = false;
+    if (keepSave) {
+        if (const u8* mem = ds->nds->GetNDSSave()) battery.assign(mem, mem + ds->nds->GetNDSSaveLength());
+        copy = ds->saveCopy;   // melonDS reports the state's save memory as a write while it loads (onSave): undone below
+        dirty = ds->saveDirty;
+    }
+    // melonDS's own length (its header's word at +8) over the bytes given: a libretro frontend hands back the size it
+    // was told (retro_serialize_size), padded past the state, and melonDS refuses any other length.
+    u32 melonLen = (u32) (len - 16);
+    if (len >= 16 + 12) {
+        u32 own;
+        memcpy(&own, data + 16 + 8, sizeof(own));
+        if (own >= 12 && own <= melonLen) melonLen = own;
+    }
+    Savestate st(const_cast<u8*>(data) + 16, melonLen, false);
+    pk_nds_wide_sync();
+    setArm9Shift(1);
+    bool loaded = !st.Error && ds->nds->DoSavestate(&st) && !st.Error;
+    setArm9Shift(boostShift());
+    if (!loaded) return false;
+    pk_nds_call_reset();
+    if (keepSave) {
+        u8* mem = const_cast<u8*>(ds->nds->GetNDSSave());
+        if (mem && battery.size() == ds->nds->GetNDSSaveLength()) memcpy(mem, battery.data(), battery.size());
+        else if (!battery.empty()) ds->nds->SetNDSSave(battery.data(), (u32) battery.size());
+        ds->saveCopy = std::move(copy);
+        ds->saveDirty = dirty;
+    } else if (const u8* mem = ds->nds->GetNDSSave()) {
+        // The state put its save memory back: the file follows, as on the GBA.
+        ds->saveCopy.assign(mem, mem + ds->nds->GetNDSSaveLength());
+        ds->saveDirty = true;
+        pk_ndsm_flush_save();
+    }
+    setClock();
+    return true;
+}
+
+bool pk_ndsm_load_state_mem_keeping_save(const uint8_t* data, size_t len)
+{
+    return ds && loadStateBytes(data, len, true);
 }
 
 bool pk_ndsm_load_state(const char* path)
@@ -423,26 +537,10 @@ bool pk_ndsm_load_state(const char* path)
     if (!ds) return false;
     std::vector<u8> data;
     if (!readFile(path, data) || data.size() < 16) return false;
-    u32 header[4];
-    memcpy(header, data.data(), sizeof(header));
-    if (header[0] != STATE_MAGIC) return false;
-    Savestate st(data.data() + 16, (u32) (data.size() - 16), false);
-    pk_nds_wide_sync();
-    setArm9Shift(1);
-    bool loaded = !st.Error && ds->nds->DoSavestate(&st) && !st.Error;
-    setArm9Shift(boostShift());
-    if (!loaded) {
+    if (!loadStateBytes(data.data(), data.size(), false)) {
         LOGE("loadstate failed: %s", path);
         return false;
     }
-    pk_nds_call_reset();
-    // The state put its save memory back: the file follows, as on the GBA.
-    if (const u8* mem = ds->nds->GetNDSSave()) {
-        ds->saveCopy.assign(mem, mem + ds->nds->GetNDSSaveLength());
-        ds->saveDirty = true;
-        pk_ndsm_flush_save();
-    }
-    setClock();
     return true;
 }
 
@@ -454,7 +552,7 @@ int pk_ndsm_state_matches_save(const char* path)
     u32 header[4];
     bool ok = fread(header, sizeof(header), 1, f) == 1;
     fclose(f);
-    if (ok && header[0] == PK_NDS_STATE_MAGIC_DSPERATE) return 2;   // DSperate's (pk_nds.h): never loaded here
+    if (ok && (header[0] == PK_NDS_STATE_MAGIC_DSPERATE || header[0] == PK_NDS_STATE_MAGIC_BANANADS)) return 2;   // another core's: never loaded here
     if (!ok || header[0] != STATE_MAGIC || header[3] == 0) return -1;
     if (ds->savePath.empty() || ds->saveReadOnly) return 1;
     std::vector<u8> file;
@@ -502,6 +600,22 @@ bool pk_ndsm_write(uint32_t addr, const uint8_t* src, int len)
     return true;
 }
 
+bool pk_ndsm_code_write(uint32_t addr, const uint8_t* src, int len)
+{
+    if (!ds || !src || len <= 0) return false;
+    if ((addr & 0xFF000000u) == 0x02000000u) {
+        for (int i = 0; i < len; i++) ds->nds->MainRAM[(addr + (u32) i) & ds->nds->MainRAMMask] = src[i];
+        for (u32 a = addr & ~3u; a < addr + (u32) len; a += 4)
+            ds->nds->JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(a);
+        return true;
+    }
+    if (addr >= PK_NDS_HOOK_ADDR && addr + (u32) len <= 0x02000000u) {
+        pk_nds_call_itcm_write(ds->nds, addr, src, (u32) len);
+        return true;
+    }
+    return false;
+}
+
 static uint32_t mainRead32(uint32_t addr)
 {
     if ((addr & 0xFF000000u) != 0x02000000u) return 0;
@@ -536,11 +650,9 @@ int pk_ndsm_field_bits(void)
     int bits = pk_nds_field_state(ds->field, mainRead32, mainWrite32, ds->wildOff);
     bits |= pk_nds_field_screen_touch(ds->field, bits, ds->nds->GPU.GPU2D_A.DispCnt);   // the intro's naming screen
     // The top screen blank and the touch screen showing something (the main menu's CONTINUE, a question asked down
-    // there): the touch screen is what there is to see.
+    // there): the touch screen is what there is to see - off the overworld and battles (pk_nds_field_screen_bits).
     const bool darkTop = oneColour(ds->top), darkBottom = oneColour(ds->bottom);
-    if (darkTop && !darkBottom) bits |= PK_NDS_FIELD_TOUCH;
-    if (darkTop) bits |= PK_NDS_FIELD_DARK_TOP;
-    if (darkBottom) bits |= PK_NDS_FIELD_DARK_BOTTOM;
+    bits = pk_nds_field_screen_bits(bits, darkTop, darkBottom);
     // A menu screen's closing fade (black after it was lit): keep the X menu it came from (pk_nds_field_keep_start_menu).
     if (!(bits & PK_NDS_FIELD_MENU)) ds->menuLitFrames = 0;
     else if (!darkTop || !darkBottom) ds->menuLitFrames++;
@@ -606,6 +718,25 @@ void pk_ndsm_set_keep_start_menu(bool on)
     if (ds) ds->keepStartMenu = on;
 }
 
+static void expWrite16(uint32_t a, uint16_t v)
+{
+    ds->nds->MainRAM[a & ds->nds->MainRAMMask] = (u8) v;
+    ds->nds->MainRAM[(a + 1) & ds->nds->MainRAMMask] = (u8) (v >> 8);
+    ds->nds->JIT.CheckAndInvalidate<0, ARMJIT_Memory::memregion_MainRAM>(a & ~3u);   // the JIT's copy of that code goes with it
+}
+
+// EXP SHARE (pk_nds_exp_share_tick): the battle's masks and FULL EXP's patch, after every frame.
+static void expShareTick(void)
+{
+    if (!ds || !ds->field) return;
+    ds->expPatched = pk_nds_exp_share_tick(ds->field, ds->expShare, ds->expMask, ds->expPatched, mainRead32, mainWrite32, expWrite16);
+}
+
+void pk_ndsm_set_exp_share(int mode, uint32_t mask)
+{
+    if (ds) { ds->expShare = mode; ds->expMask = mask; }
+}
+
 void pk_ndsm_set_cpu_boost(bool on)
 {
     if (!ds || ds->cpuBoost == on) return;
@@ -613,7 +744,11 @@ void pk_ndsm_set_cpu_boost(bool on)
     setArm9Shift(boostShift());
 }
 
-void pk_nds_set_wild_rates(const int32_t* triples, int n) { pk_nds_field_set_rates(triples, n); }
+void pk_nds_set_wild_rates(const int32_t* triples, int n)
+{
+    pk_nds_field_set_rates(triples, n);
+    pk_ndsb_set_wild_rates(triples, n);   // BananaDS's own copy of the field read
+}
 
 int pk_ndsm_set_cheats(const uint32_t* words, int nWords, const int32_t* lengths, int nCheats)
 {
@@ -683,7 +818,12 @@ bool pk_ndsm_presented(void) { return ds && ds->presented; }
 
 bool pk_ndsm_gpu_frame_info(int64_t timestamp, int32_t out[6]) { return pk_nds_gl_frame_info(timestamp, out); }
 
-void pk_nds_set_window(ANativeWindow* window) { pk_nds_gl_set_window(window); }
+void pk_nds_set_window(ANativeWindow* window)
+{
+    if (window) ANativeWindow_acquire(window);   // a reference for BananaDS's too
+    pk_ndsb_set_window(window);
+    pk_nds_gl_set_window(window);
+}
 
 int pk_ndsm_wide_scene(void)
 {

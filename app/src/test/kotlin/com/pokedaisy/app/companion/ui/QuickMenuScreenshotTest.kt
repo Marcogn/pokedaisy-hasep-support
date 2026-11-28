@@ -3,6 +3,7 @@ package com.pokedaisy.app.companion.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import app.cash.paparazzi.DeviceConfig
@@ -25,6 +26,7 @@ import org.junit.Test
  *     ./gradlew :app:recordPaparazziDebug --tests '*QuickMenuScreenshotTest'
  */
 class QuickMenuScreenshotTest {
+    @Before fun hosts() = installTestHosts(paparazzi.context)
     @get:Rule
     val paparazzi = Paparazzi(
         deviceConfig = DeviceConfig.PIXEL_5.copy(screenWidth = 1920, screenHeight = 1080, orientation = ScreenOrientation.LANDSCAPE),
@@ -131,6 +133,22 @@ class QuickMenuScreenshotTest {
     @Test fun ring7Icons() = ringOf(7, false)
     @Test fun ring8Icons() = ringOf(8, false)
     @Test fun ring9Icons() = ringOf(9, false)
+
+    /** Every action on the RING in a small screen (a split screen, a phone's half: GitHub #1225): the ring shrinks to fit
+     *  rather than its tiles running into each other. */
+    private fun smallRing(labels: Boolean, widthPx: Int, heightPx: Int) = paparazzi.snapshot {
+        val state = QuickMenuState().apply { trigger(true); ring = true; this.labels = labels; items = QuickAction.entries }
+        Box(Modifier.fillMaxSize().background(Color.DarkGray)) {
+            val d = androidx.compose.ui.platform.LocalDensity.current
+            Box(Modifier.size(with(d) { widthPx.toDp() }, with(d) { heightPx.toDp() }).background(Color.Black)) {
+                FieldHudScene(FieldHudStyle(), FieldHudScreenshotTest.wild)
+                QuickMenu(state, FieldHudScreenshotTest.snapshot, Actions(), QuickAction.entries.toSet(), FieldHudLook.GLASS)
+            }
+        }
+    }
+
+    @Test fun ringSmall() = smallRing(true, 1080, 600)
+    @Test fun ringSmallIcons() = smallRing(false, 1080, 600)
 
     /** Three kinds of REPEL in the bag: which one. */
     @Test fun repelList() = shot(repels = listOf(86, 83, 84))

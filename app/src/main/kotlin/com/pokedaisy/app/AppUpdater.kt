@@ -6,18 +6,24 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Updates from the app's GitHub releases: the newest published release (not a
- * draft or a pre-release - those are for testing) that carries an `.apk` and
- * whose tag is a higher version than this build's versionName. Only talks to api.github.com and GitHub's download
- * host; no account, no key.
+ * Updates from the website's releases list (`/api/releases/v1/releases.json`, GitHub's release JSON shape, written by
+ * the site's build from `website/src/data/releases.json`): the newest published release (never a draft; a pre-release
+ * - a beta or rc - only with BETA UPDATES on) that carries an `.apk` and whose tag is a higher version than this
+ * build's versionName. No account, no key.
+ *
+ * The Hasep fork: this build updates from the fork's own GitHub releases ([RELEASES_API], the same JSON shape) and only
+ * watches pokedaisy.com's list ([UPSTREAM_RELEASES_API]) for a new PokeDaisy to merge.
  */
 object AppUpdater {
 
-    /** The Hasep fork's releases: what this build installs (its own applicationId and signing key). */
+    /** The Hasep fork's releases: what this build installs (its own applicationId and signing key), from GitHub's API. */
     const val REPO = "Marcogn/pokedaisy-hasep-support"
     const val RELEASES_PAGE = "https://github.com/$REPO/releases"
-    /** PokeDaisy itself: only watched, never installed - a new version there means the fork wants a merge. */
-    const val UPSTREAM_REPO = "lidor30/pokedaisy"
+    const val RELEASES_API = "https://api.github.com/repos/$REPO/releases?per_page=20"
+    /** PokeDaisy itself: only watched, never installed - a new version there means the fork wants a merge. Since
+     * PokeDaisy 1.6.2.2 its releases live on its website (the same JSON shape as GitHub's), the code on GitLab. */
+    const val SITE = "https://pokedaisy.com"
+    const val UPSTREAM_RELEASES_API = "$SITE/api/releases/v1/releases.json"
 
     class Release(
         val version: String,
@@ -27,23 +33,24 @@ object AppUpdater {
         val pageUrl: String,
     )
 
-    /** The newest release that is newer than [current], or null (none, or offline). Blocking. */
-    fun check(current: String, repo: String = REPO): Release? = runCatching {
-        val conn = (URL("https://api.github.com/repos/$repo/releases?per_page=20").openConnection() as HttpURLConnection).apply {
+    /** The newest release that is newer than [current], or null (none, or offline); pre-releases too when [betas]. Blocking. */
+    fun check(current: String, betas: Boolean = false, api: String = RELEASES_API): Release? = runCatching {
+        val conn = (URL(api).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 8000
-            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "PokeDaisy/$current")
         }
         val body = conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-        newest(JSONArray(body))
+        newest(JSONArray(body), betas)
     }.getOrNull()?.takeIf { isNewer(it.version, current) }
 
-    /** The highest-versioned published, non-pre-release release with an APK in [releases] (GitHub's JSON). */
-    fun newest(releases: JSONArray): Release? {
+    /** The highest-versioned published release with an APK in [releases] (the site's list, GitHub's JSON shape): pre-releases count only
+     *  with [betas], and then a release still outranks its own betas (1.6.2 > 1.6.2-rc.2). */
+    fun newest(releases: JSONArray, betas: Boolean = false): Release? {
         val found = (0 until releases.length()).mapNotNull { i ->
             val r = releases.getJSONObject(i)
-            if (r.optBoolean("draft") || r.optBoolean("prerelease")) return@mapNotNull null
+            if (r.optBoolean("draft") || (r.optBoolean("prerelease") && !betas)) return@mapNotNull null
             val assets = r.optJSONArray("assets") ?: return@mapNotNull null
             val apk = (0 until assets.length()).map { assets.getJSONObject(it) }
                 .firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) } ?: return@mapNotNull null
@@ -62,7 +69,7 @@ object AppUpdater {
 
     /** PokeDaisy's newest release when it's newer than [merged], the one this fork build is built on
      * (BuildConfig.UPSTREAM_VERSION: the fork's own version is that plus one part), or null. Blocking. */
-    fun checkUpstream(merged: String): Release? = check(merged, UPSTREAM_REPO)
+    fun checkUpstream(merged: String): Release? = check(merged, api = UPSTREAM_RELEASES_API)
 
     /**
      * Semantic-version order: `1.0.0-beta.1` < `1.0.0-beta.2` < `1.0.0-rc.1` < `1.0.0`
@@ -101,7 +108,7 @@ object AppUpdater {
     }
 
     /** Downloads [release]'s APK to [dest] (swapped in only once complete and the
-     * size GitHub reported). [onProgress] gets 0..1. Blocking. */
+     * size the list gave). [onProgress] gets 0..1. Blocking. */
     fun download(release: Release, dest: File, onProgress: (Float) -> Unit): Boolean = runCatching {
         dest.parentFile?.mkdirs()
         val tmp = File(dest.parentFile, "${dest.name}.part")

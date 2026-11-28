@@ -27,8 +27,10 @@ import okio.Path
 object ReusableTms {
     /** One spot: [expect] is the ROM from [at] (the compare through the RemoveBagItem call); the branch to patch sits
      * [BRANCH] bytes in. */
-    class Site(val at: Long, val expect: ByteArray) {
-        val branch get() = at + BRANCH
+    class Site(val at: Long, val expect: ByteArray, private val patchAt: Long? = null, private val patchValue: ByteArray? = null) {
+        /** What's written where: the GBA's `bhi` made a `b` ([ALWAYS_SKIP]), or a Game Boy cart's own edit ([GbGamePatches]). */
+        val branch get() = patchAt ?: (at + BRANCH)
+        val value: ByteArray get() = patchValue ?: ALWAYS_SKIP
         /** Where its call goes: the build's RemoveBagItem. */
         val calls: Long get() = blTarget(at + 12, expect, 12)
     }
@@ -44,6 +46,10 @@ object ReusableTms {
      * checked headless (a TM taught on their saves stayed in the bag: SoulGold v1.1.4 and v1.2's third build), Prism and
      * Polished Crystal (a bit per TM). */
     val BUILT_IN = setOf(GameKind.RADICAL_RED, GameKind.UNBOUND, GameKind.SOULGOLD, GameKind.PRISM, GameKind.POLISHED_CRYSTAL, GameKind.BLACK, GameKind.WHITE, GameKind.BLACK2, GameKind.WHITE2)
+
+    /** The running game keeps its own TMs: a [BUILT_IN] kind, or Origin HeartGold, which runs as HEARTGOLD (a TM taught
+     * headless stayed in its bag). */
+    val builtIn: Boolean get() = activeGame in BUILT_IN || (originHeartGold && activeGame == GameKind.HEARTGOLD)
 
     /** How many sites the engine behind [code] (the header's game code) has: the FireRed engine (FireRed, LeafGreen,
      * Ultra Violet's PUVV) three, Emerald / Ruby / Sapphire one; 0 = not a Gen 3 code we know. */

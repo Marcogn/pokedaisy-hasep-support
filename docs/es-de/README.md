@@ -6,7 +6,7 @@ to ES-DE. This guide adds PokeDaisy as an emulator for GBA in ES-DE's custom
 systems folder, so it shows up next to the emulators you already use.
 
 Not yet tried from a real ES-DE. If something doesn't work,
-[open an issue](https://github.com/lidor30/pokedaisy/issues).
+[tell us](https://pokedaisy.com/feedback/#bug).
 
 ## 1. Tell ES-DE where PokeDaisy is
 
@@ -37,7 +37,7 @@ or for single games from their menu.
 
 ## What PokeDaisy does with the ROM
 
-See [Launch from a frontend](../DEVELOPMENT.md#launch-from-a-frontend-cocoon-iisu-es-de-)
+See [Launching from a frontend](https://pokedaisy.com/docs/library/#launching-from-a-frontend)
 for the full list. In short: a ROM it can read is played where it is, anything else
 is copied into PokeDaisy's library once. Saves are found by the ROM's file name, so
 point PokeDaisy's Settings > Folders at your other emulator's saves folder (RetroArch's,

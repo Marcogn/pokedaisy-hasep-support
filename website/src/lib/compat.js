@@ -69,8 +69,12 @@ export async function randomizedRetailOf(data, { code, rev }, bytes) {
   return (await sha1Hex(copy)) === rom.sha1 ? rom.retailSha1 : null;
 }
 
+// A game only the newest beta supports (beta.js' withBeta marks its entries): the verdict says which beta.
+const inBeta = (entry) => (entry.beta ? { beta: entry.beta } : {});
+
 /**
- * The verdict for one ROM: `supported` (the companion knows this exact game) or `unsupported`.
+ * The verdict for one ROM: `supported` (the companion knows this exact game; `beta`: only the newest beta, that version)
+ * or `unsupported`.
  * `size` is the ROM's own size (not an archive's); `retailOf` the retail dump it is ([retailDumpOf]); `randomizedOf` the
  * retail cart it's a randomized copy of ([randomizedRetailOf]).
  */
@@ -78,18 +82,18 @@ export function verdict(data, { platform, code, rev, size, sha1, retailOf, rando
   if (platform === 'gb') {
     const hit = data.gameBoy.find((g) => g.sha1 === sha1);
     return hit
-      ? { status: 'supported', title: hit.title, family: 'Game Boy' }
+      ? { status: 'supported', title: hit.title, family: 'Game Boy', ...inBeta(hit) }
       : { status: 'unsupported', reason: 'gb' };
   }
   if (platform === 'nds') {
     // A DS hack under a retail header, by a word of its code ([dsHackOf]; the app's OriginHeartGold.matches).
-    if (dsHack) return { status: 'supported', title: dsHack.title, version: dsHack.version, family: 'Nintendo DS' };
+    if (dsHack) return { status: 'supported', title: dsHack.title, version: dsHack.version, family: 'Nintendo DS', ...inBeta(dsHack) };
     // By the header's code and revision, as the app takes a DS cart (CompanionSupport.isSupported).
     const games = (data.ds ?? []).filter((g) => g.code === code);
     if (!games.length) return { status: 'unsupported', reason: 'ds' };
     const hit = games.find((g) => g.rev === rev);
     return hit
-      ? { status: 'supported', title: hit.title, family: 'Nintendo DS' }
+      ? { status: 'supported', title: hit.title, family: 'Nintendo DS', ...inBeta(hit) }
       : { status: 'unsupported', reason: 'revision', base: games[0].title };
   }
   if (platform !== 'gba') return { status: 'unsupported', reason: 'not-a-rom' };
@@ -98,7 +102,7 @@ export function verdict(data, { platform, code, rev, size, sha1, retailOf, rando
   if (retail) {
     if (size > data.maxBaseSize) return { status: 'unsupported', reason: 'retail-hack', base: retail.title };
     if (!retail.revs.includes(rev)) return { status: 'unsupported', reason: 'revision', base: retail.title };
-    return { status: 'supported', title: data.titles[sha1] ?? retail.title };
+    return { status: 'supported', title: data.titles[sha1] ?? retail.title, ...inBeta(retail) };
   }
 
   // A hack may carry a game code of its own (Ultra Violet's PUVV): its base game's title. Only
@@ -107,7 +111,7 @@ export function verdict(data, { platform, code, rev, size, sha1, retailOf, rando
   const base = data.baseCodes[code] ?? ownCode;
   if (!base) return { status: 'unsupported', reason: 'other-game' };
   const hack = data.hacks.find((h) => h.sha1 === sha1);
-  if (hack) return { status: 'supported', title: hack.title, version: hack.version, base };
+  if (hack) return { status: 'supported', title: hack.title, version: hack.version, base, ...inBeta(hack) };
   // Detected by the app, but its companion isn't ready yet: the game plays, the companion doesn't read it.
   const soon = (data.inProgress ?? []).find((h) => h.sha1 === sha1);
   if (soon) return { status: 'unsupported', reason: 'in-progress', title: soon.title, version: soon.version, base };
@@ -115,7 +119,8 @@ export function verdict(data, { platform, code, rev, size, sha1, retailOf, rando
   // under those codes is a hack the app doesn't know.
   const randomized = randomizedOf && data.titles[randomizedOf] ? `${data.titles[randomizedOf]} (Randomized)` : undefined;
   const title = !ownCode && size <= data.maxBaseSize ? data.titles[sha1] ?? data.titles[retailOf] ?? randomized : undefined;
-  return title ? { status: 'supported', title } : { status: 'unsupported', reason: 'unknown-hack', base };
+  const beta = data.betaTitles?.[sha1] ?? data.betaTitles?.[retailOf];
+  return title ? { status: 'supported', title, ...(beta && { beta }) } : { status: 'unsupported', reason: 'unknown-hack', base };
 }
 
 /**

@@ -46,6 +46,25 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     # Run again: the save is backed up first.
     run(d,str(d/'roms/diagnostic.gb'),'--frames','10')
     backups=list((d/'saves/pokedaisy-backups').glob('diagnostic.gb.backup-*.sav'));assert len(backups)==1,backups
+    # A save named after the ROM without its extension (another emulator's: pokeblack2.nds -> pokeblack2.sav) is used as it is,
+    # for a ROM no other ROM beside it shares the name of.
+    shutil.copy(diag/'diagnostic.gb',d/'roms'/'solo.gb')
+    (d/'saves/solo.sav').write_bytes(b'\0'*8192)
+    run(d,str(d/'roms/solo.gb'),'--frames','120')
+    assert (d/'saves/solo.sav').read_bytes()[:1]==b'\x5a','the save named without the ROM extension was not the one written'
+    assert not (d/'saves/solo.gb.sav').exists(),'the ROM-named save was made beside the other emulator name'
+    # With both names there, the ROM's own file name wins.
+    (d/'saves/solo.gb.sav').write_bytes(b'\0'*8192)
+    run(d,str(d/'roms/solo.gb'),'--frames','120')
+    assert (d/'saves/solo.gb.sav').read_bytes()[:1]==b'\x5a','the ROM-named save did not win'
+    (d/'roms/solo.gb').unlink()
+    # diagnostic.gb has diagnostic.gba and .nds beside it: diagnostic.sav could be any of theirs, so it's left alone.
+    (d/'saves/diagnostic.gb.sav').rename(d/'saves/diagnostic.sav')
+    (d/'saves/diagnostic.sav').write_bytes(b'\0'*8192)
+    run(d,str(d/'roms/diagnostic.gb'),'--frames','120')
+    assert (d/'saves/diagnostic.sav').read_bytes()==b'\0'*8192,'a save another ROM could own was written'
+    assert (d/'saves/diagnostic.gb.sav').read_bytes()[:1]==b'\x5a','the ROM-named save was not made'
+    (d/'saves/diagnostic.sav').unlink()
     # A Game Boy cartridge with a clock (MBC3, as Crystal's): the clock is kept after the save, mGBA's layout.
     rtc=bytearray((diag/'diagnostic.gb').read_bytes());rtc[0x147]=0x10;rtc[0x14d]=(-sum(rtc[0x134:0x14d])-25)&255
     (d/'roms/clock.gb').write_bytes(rtc)
@@ -62,11 +81,19 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     assert any(r>120 and g>120 and b>120 for r,g,b in seen) and any(r>120 and g>120 and b<60 for r,g,b in seen),(seen,log[-500:])
     # DS maps the ROM from its path, so it also works above the host's 64 MiB buffer limit.
     with (d/'roms/diagnostic.nds').open('r+b') as nds:nds.truncate(65 << 20)
-    # Select DS from the sorted list, save a state through the host menu, and return (QUIT asks: CANCEL, then QUIT).
-    env['POCKET_KEYS']='10:down,20:down,30:down,40:a,70:menu,80:down,90:a,100:menu,110:up,120:a,130:down,140:a'
-    run(d,'--frames','65')
+    # Select DS from the sorted list, save a state through the host menu, and return (QUIT asks: CANCEL, then QUIT). In a
+    # DATA folder of its own: the library writes the cores' settings (EXPAND) on its first start, which the runs here
+    # mustn't get. Its list view (library.txt), not the grid, whose columns follow the window: the three games are its
+    # rows, sorted by file name, so two DOWNs reach the DS one.
+    lib=d/'library';(lib/'roms').mkdir(parents=True)
+    for rom in ('diagnostic.gb','diagnostic.gba','diagnostic.nds'):os.link(d/'roms'/rom,lib/'roms'/rom)
+    (lib/'library.txt').write_text('view=0\nsort=0\ngrid=0\n')
+    env['POCKET_KEYS']='10:down,20:down,40:a,70:menu,80:down,90:a,100:menu,110:up,120:a,130:down,140:a'
+    run(lib,'--frames','65')
     del env['POCKET_KEYS']
-    assert (d/'states/diagnostic.nds.ss').exists(),'DS did not launch from the game list'
+    assert (lib/'states/diagnostic.nds.ss').exists(),'DS did not launch from the game list'
+    assert not (d/'saves/pokedaisy/settings.ini').exists() or 'aspect=1' not in (d/'saves/pokedaisy/settings.ini').read_text(),\
+        "the game list's settings reached the other runs' DATA"
     run(d,str(d/'roms/diagnostic.nds'),'--frames','90','--shot',str(d/'ds.png'))
     w,h,bpp,rows=png_pixels(d/'ds.png')
     mid=rows[h//2][(w//2)*bpp:(w//2)*bpp+3]
@@ -95,9 +122,9 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     run(d,str(d/'roms/diagnostic.gb'),'--frames','80')
     del env['POCKET_KEYS']
     assert (d/'states/diagnostic.gb.ss').exists(),'SAVE STATE from the host menu wrote nothing'
-    # A/B BUTTONS (seven rows down from RESUME) is saved with the host's settings.
-    env['POCKET_KEYS']='20:menu,'+','.join(f'{30+10*i}:down' for i in range(7))+',110:a'
-    run(d,str(d/'roms/diagnostic.gb'),'--frames','140')
+    # A/B BUTTONS (eight rows down from RESUME, past KEYBOARD) is saved with the host's settings.
+    env['POCKET_KEYS']='20:menu,'+','.join(f'{30+10*i}:down' for i in range(8))+',120:a'
+    run(d,str(d/'roms/diagnostic.gb'),'--frames','150')
     del env['POCKET_KEYS']
     assert 'swap_ab=1' in (d/'host.ini').read_text(),(d/'host.ini').read_text()
     # HOTKEYS (three rows down): REWIND takes L3; SAVE STATE takes R2, which FAST FORWARD then loses.
@@ -117,8 +144,8 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     run(d,str(d/'roms/diagnostic.gb'),'--frames','60')
     del env['POCKET_KEYS']
     assert (d/'states/diagnostic.gb.ss').exists(),'the SAVE STATE hotkey wrote nothing'
-    # No ROM: the game list.
-    run(d,'--frames','5','--shot',str(d/'list.png'));png_pixels(d/'list.png')
+    # No ROM: the game list (its own DATA folder again).
+    run(lib,'--frames','5','--shot',str(d/'list.png'));png_pixels(d/'list.png')
     # A ROM no core plays is refused, not crashed on.
     (d/'roms/bad.txt').write_text('x')
     r=subprocess.run([str(binary),'--data',str(d),str(d/'roms/bad.txt'),'--frames','5'],env=env,capture_output=True,text=True,timeout=60)

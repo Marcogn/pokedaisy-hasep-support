@@ -51,11 +51,12 @@ X Y`, joined with commas (`A,UP`), or `NONE`.
 | `peek8/16/32 ADDR`, `poke8/16/32 ADDR V` | The ARM9's bus. |
 | `ards W W ...` | One Action Replay DS cheat (hex words, two a line) in melonDS's AREngine, replacing the ones before, as CHEATS does (`pk_nds_set_cheats`); `ards` alone takes it out. |
 | `fieldinfo` | The field read (`pk_nds_field_state`) and the pointers behind it (Black, White and their sequels: the GameSystem's proc, its overlay, field map and event, engine A's BG tiles, the battle adapter's command). |
-| `trace N` | N frames, each one's field bits, master brightness, DISPCNT and BG3's tiles. |
+| `trace N` | N frames, each one's field bits as the app gets them (the screens' own included: `pk_nds_field_screen_bits`), master brightness, DISPCNT and BG3's tiles. |
 | `battlemenu N` | The battle controller's command (`pk_nds_battle_command`) each frame for N frames, as it changes. |
 | `wide MX [MY]` | EXPAND with MX DS pixels left and right, MY above and below (0 = off). |
 | `look DX DY` | From here on the window moves DX, DY DS pixels a frame before each frame, as the look-around moves it (`look 0 0` leaves it where it is); `ffmode` records that window. |
 | `wideshot FILE`, `wideshots PREFIX EVERY COUNT` | The last wide frame(s) as PNG. |
+| `foreignprops 1/0` | HeartGold / SoulSilver and Platinum under `wide`: a loaded map chunk of another area keeps its props hidden for each frame, as the app does (`pk_nds_field_foreign_props`; 1, the default) or draws them as the game would (0). |
 | `widecheck [N]` | N frames, each checked where the slices overlap the game's own frame (must be 0 differing). |
 | `widecount` | Polygons in each slice this frame. |
 | `bgdump BG FILE` | Engine A's text BG whole, as the hardware reads it (clear = magenta). |
@@ -73,6 +74,7 @@ X Y`, joined with commas (`A,UP`), or `NONE`.
 | `script FILE` / `scriptgo FILE` | A field script (the game's bytecode) run as the PC job runs its own; `scriptgo` returns once it has started. |
 | `itcm32 ADDR V` | A word into the hook's spare ITCM (an argument a call points at). |
 | `watch LO HI [r\|w\|rw] [N]`, `watch off` | The game's own reads / writes of main RAM in [LO, HI) (at most N, default 20), each with the ARM9's PC, LR, r0-r5 and SP; `WATCH_STACK=N` in the environment adds N stack words (the callers' return addresses). The interpreter only: run without `--jit`. How Black's PC and FLY were traced. |
+| `expshare MODE MASK` | EXP SHARE from now on as the app runs it (`pk_nds_exp_share_tick`, after every frame): MODE 0 off / 1 SPLIT / 2 FULL EXP, MASK the party slots (Gen 4's US carts). |
 | `wildoff 1/0`, `battles` | WILD ENCOUNTERS OFF / back on, and the battles started since. |
 | `music SECONDS FILE.wav` | STEADY's copy (`pk_nds_music`) begun from the game as it is, run alone; its audio, its cost a frame and the longest stall (`MUSIC_DEBUG=1` prints the ARM7 / IPC state and the sounding channels). |
 | `steady G FILE.wav` / `steady off` | From here on, the app's STEADY as EmulatorEngine runs it at G game frames a refresh (a copy for each song once its player settles, taken again when it changes; `STEADY_DEBUG=1` prints the copy's state), its audio written at `steady off`; `steady 0` records the game's own audio instead. Run a script both ways and compare. |

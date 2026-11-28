@@ -6,15 +6,16 @@ import Downloads from '../components/Downloads.astro';
 import HeroDevice from '../components/HeroDevice.astro';
 import HeroSingleDevice from '../components/HeroSingleDevice.astro';
 import data from '../data/compat.json';
-import { REPO_URL, formatDate, getReleases, getDownloads, highlights } from '../lib/releases.js';
+import { formatDate, getReleases, getDownloads, downloadsBefore, highlights, COUNT_API } from '../lib/releases.js';
 import { REDDIT_URL, DISCORD_URL, KOFI_URL, PATREON_URL, COFFEE_URL } from '../lib/links.js';
 import { trFor, msg } from '../i18n/index.js';
+import { loadRomFeatures, UNLISTED } from '../lib/romFeatures.js';
 
 const tr = trFor(Astro.url);
 
 const releases = await getReleases();
 const latest = releases[0];
-const download = latest?.apk ?? `${REPO_URL}/releases/latest`;
+const download = latest?.apk ?? '/releases/';
 const downloads = await getDownloads();
 
 const gameCount = new Set(data.matrix.rows.map((r) => r.game)).size;
@@ -37,6 +38,10 @@ const expandShots = [
   ['firered-field', 'FireRed'], ['soulgold-expand', 'SoulGold'], ['rogue-expand', 'Emerald Rogue'], ['lazarus-expand', 'Lazarus'],
   ['monomyth-expand', 'Monomyth'], ['mariomon-expand', 'Super Mariomon'], ['recharged-yellow-expand', 'Recharged Yellow'], ['yellow-field', 'Yellow'],
 ];
+// How many more games EXPAND works in than the tabs show (docs/ROM_FEATURES.md, a game's versions counted once).
+const expandGames = new Set(loadRomFeatures().rows
+  .filter((r) => !r.blocked && !UNLISTED.includes(r.game) && ['yes', 'part'].includes(r.cells.EXPAND)).map((r) => r.game)).size;
+const expandMore = Math.max(0, expandGames - expandShots.length);
 // Everything else, short: the chores and the player.
 const more = [
   ['pc', msg('PC ANYWHERE'), msg('Open your PC boxes from the bag, the HUD or the quick menu, wherever you stand. No walk back to a Pokémon Center.')],
@@ -53,22 +58,36 @@ const more = [
   ['clock', msg('STATUS BAR'), msg('Game, place, money, clock and battery in a strip above the game.')],
 ];
 const media = (name: string) => `/media/${name}`;
-const deviceList = [
-  ['dual', 'AYN THOR', msg('Made for it, tested daily.'), msg('TESTED'), 'f-pillGreen'],
-  ['dual', 'RETROID POCKET DUO LITE', msg('Its 4:3 bottom screen gets a layout of its own. The original Duo should work too.'), msg('SUPPORTED'), 'f-pillGreen'],
-  ['dual', 'ANBERNIC RG DS', msg('SWAP SCREENS puts the game on its top display.'), msg('SHOULD WORK'), 'f-pillYellow'],
-  ['single', msg('ONE SCREEN'), msg('The companion opens as a window over the game or a panel beside it, with the HUD and quick menu on the game. Tested on the Retroid Pocket 6.'), msg('TESTED'), 'f-pillBlue'],
-  ['phone', msg('PHONES, UPRIGHT'), msg('Hold an Android phone upright: the game on top, the companion under it. New: so far checked in screenshots only.'), msg('NEW'), 'f-pillRed'],
-  ['moreDevice', msg('COMING SOON'), msg('More handhelds, tablets and foldables. Want yours supported? Ask for it below.'), msg('SOON'), 'f-pillGrey'],
-];
+// The hero's shots, scaled down ahead (scripts/hero-shots.mjs, lanczos) so the browser never shrinks them more than
+// ~1.5x itself: its own bilinear step from 1240 px to a 120-350 px screen left text and edges jagged. `sizes` follows
+// the screens' measured widths: stacked (960px and under), a small window, a wide one (the screens stop growing ~1440px). The Thor's top screen plays
+// the flight, a 720 px copy of the clip.
+const HERO_WIDTHS = [200, 320, 480, 720];
+const heroSrcset = (name: string) => HERO_WIDTHS.map((w) => `/media/hero/${name}-${w}.webp ${w}w`).join(', ');
+const HERO_SIZES = {
+  bottom: '(max-width: 960px) 30vw, (max-width: 1300px) 15.5vw, 200px',
+  single: '(max-width: 960px) 50vw, (max-width: 1300px) 23vw, 320px',
+};
 const ticker = ['GB · GBC · GBA · DS', msg('TWO SCREENS OR ONE'), msg('PARTY'), msg('BAG'), msg('BATTLE'), msg('MAP'), msg('DEX'), msg('GUIDE'), msg('TRAINER CARD'), msg('SAVE STATES'), msg('HUD'), msg('QUICK MENU'), msg('EXPAND'), msg('PC ANYWHERE'), msg('FREE FLIGHT'), msg('FAST-FORWARD'), msg('SHADERS'), msg('ACHIEVEMENTS')]
   .map((t) => tr(t)).concat(tr('{n} GAMES', { n: gameCount }));
 const title = 'POKEDAISY'.split('');
+// The thank-you bar under the header (100,000 downloads, November 2026): the number in the page's own digits, drawn apart.
+const milestone = (100000).toLocaleString(tr.locale);
+const [thanksBefore, thanksAfter] = tr('THANK YOU FOR {n} DOWNLOADS!', { n: milestone }).split(milestone);
 ---
 <Base
   title={tr('PokeDaisy: Game Boy Pokémon with a live companion')}
   description={tr('A free player for Game Boy, Game Boy Color, Game Boy Advance and Nintendo DS Pokémon games on Android handhelds with two screens or one: the game, and a live companion with your party, battles, map, dex and guide on the second screen or right beside it, plus a HUD and a quick menu on the game screen.')}
 >
+  <!-- Thanks for 100,000 downloads: a strip between the header and the page. -->
+  <div class="thanks" role="note">
+    <div class="container thanks-in">
+      <span class="thanks-bloom" aria-hidden="true"><Pixel name="logo" scale={0.5} /></span>
+      <p class="thanks-text">{thanksBefore}<span class="thanks-num">{milestone}</span>{thanksAfter}</p>
+      <span class="thanks-heart" aria-hidden="true"><Pixel name="heart" scale={1} /></span>
+    </div>
+  </div>
+
   <!-- Hero -->
   <section class="hero container">
     <div class="hero-copy" data-track-where="hero">
@@ -83,7 +102,7 @@ const title = 'POKEDAISY'.split('');
       </div>
       <p class="hero-lead">{tr('Pokémon, played better. Game Boy to DS, with a live companion, a widescreen overworld, a HUD and quick menu, and every chore one button away.')}</p>
       <div class="cta">
-        <a class="btn f-primary h-primaryHot primary big" href={download}>
+        <a class="btn f-primary h-primaryHot primary big" href={download} data-download-open>
           <Pixel name="download" scale={1} /> {tr('DOWNLOAD')}{latest && <span class="ver">v{latest.version}</span>}
         </a>
         <!-- The APK is one tap; Linux and the 3DS are a card each further down. -->
@@ -94,15 +113,15 @@ const title = 'POKEDAISY'.split('');
       </div>
       <!-- The community: the Discord for help and chat, the subreddit. -->
       <div class="cta community">
-        <a class="btn f-discord h-discordHot" href={DISCORD_URL}><Pixel name="discord" scale={0.667} /> {tr('JOIN THE DISCORD')}</a>
+        <a class="btn f-discord h-discordHot" href={DISCORD_URL}><Pixel name="discord" scale={0.667} /> DISCORD</a>
         <a class="btn f-reddit h-redditHot" href={REDDIT_URL}><Pixel name="reddit" scale={0.667} /> r/POKEDAISY</a>
       </div>
-      <a class="downloads" href={`${REPO_URL}/releases`} data-downloads hidden={!downloads}>
+      <a class="downloads" href={tr.path('/releases/')} data-downloads={downloadsBefore()} data-count-api={COUNT_API} hidden={!downloads}>
         <Pixel name="download" scale={1} />
         <span class="dl-count" data-downloads-count>{downloads.toLocaleString(tr.locale)}</span>
         <span class="dl-label">{tr('DOWNLOADS')}</span>
       </a>
-      <p class="hero-meta small muted"><span>Android 8.0+</span><span>{tr('Free and open source')}</span><span>{tr('No ads')}</span></p>
+      <p class="hero-meta small muted"><span>{tr('Free and open source')}</span><span>{tr('No ads')}</span></p>
     </div>
     <div class="hero-art">
       <div class="glow"></div>
@@ -112,17 +131,17 @@ const title = 'POKEDAISY'.split('');
         <div class="duo-dual">
           <HeroDevice>
             <div slot="top" class="screen-shots">
-              <video class="on" src={media('free-flight.mp4')} poster={media('free-flight-poster.webp')} autoplay muted loop playsinline aria-label={tr('Take off and fly anywhere')} data-autoplay></video>
+              <video class="on" src={media('hero/free-flight-720.mp4')} poster={media('hero/free-flight-poster-720.webp')} autoplay muted loop playsinline aria-label={tr('Take off and fly anywhere')} data-autoplay></video>
             </div>
             <div slot="bottom" class="screen-shots" data-cycle="3200">
-              {companion.slice(0, 5).map(([shot, name], i) => <img src={media(`companion-${shot}.webp`)} alt={tr('The companion\'s {tab}', { tab: tr(name) })} class:list={[i === 0 && 'on']} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" />)}
+              {companion.slice(0, 5).map(([shot, name], i) => <img src={media(`hero/companion-${shot}-480.webp`)} srcset={heroSrcset(`companion-${shot}`)} sizes={HERO_SIZES.bottom} alt={tr('The companion\'s {tab}', { tab: tr(name) })} class:list={[i === 0 && 'on']} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" />)}
             </div>
           </HeroDevice>
         </div>
         <div class="duo-single">
           <HeroSingleDevice>
             <div slot="screen" class="screen-shots" data-cycle="3200" data-offset="1600">
-              {expandShots.slice(1, 6).map(([shot, game], i) => <img src={media(`${shot}.webp`)} alt={tr('{game} with EXPAND', { game })} class:list={[i === 0 && 'on']} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" />)}
+              {expandShots.slice(1, 6).map(([shot, game], i) => <img src={media(`hero/${shot}-480.webp`)} srcset={heroSrcset(shot)} sizes={HERO_SIZES.single} alt={tr('{game} with EXPAND', { game })} class:list={[i === 0 && 'on']} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" />)}
             </div>
           </HeroSingleDevice>
         </div>
@@ -174,6 +193,7 @@ const title = 'POKEDAISY'.split('');
       <div class="viewer-screen f-card">
         {expandShots.map(([shot, game], i) => <img src={media(`${shot}.webp`)} alt={tr('{game} with EXPAND', { game })} class:list={[i === 0 && 'on']} loading="lazy" decoding="async" />)}
       </div>
+      {expandMore > 0 && <a class="viewer-more btn f-btn h-btnHot small" href="#games"><Pixel name="star" scale={0.667} /> {tr('+{n} MORE GAMES WITH EXPAND', { n: expandMore })}</a>}
     </div>
   </section>
 
@@ -247,7 +267,7 @@ const title = 'POKEDAISY'.split('');
     <div class="player-grid">
       {more.map(([icon, name, text], i) => (
         <article class="player-item" data-reveal style={`--i:${i % 3}`}>
-          <span class="player-icon f-card"><Pixel name={icon} scale={1} /></span>
+          <span class="player-icon f-card"><Pixel name={icon} scale={icon === 'single' ? 0.667 : 1} /></span>
           <div>
             <h3 class="player-name">{tr(name)}</h3>
             <p class="small muted">{tr(text)}</p>
@@ -266,26 +286,6 @@ const title = 'POKEDAISY'.split('');
       <p class="lead">{tr('Free on every platform, and open source. Pick yours, then follow its install guide.')}</p>
     </div>
     <Downloads />
-  </section>
-
-  <!-- Devices -->
-  <section class="block container">
-    <div class="section-head">
-      <span class="eyebrow">{tr('DEVICES')}</span>
-      <h2 class="heading">{tr('Two screens or one')}</h2>
-      <p class="lead">{tr('On a dual-screen handheld the companion gets a screen of its own. On one screen it opens in a window over the game or a panel beside it, or under it on a phone held upright. On a dual-screen handheld, SINGLE SCREEN plays it that way and frees the second screen for other apps.')}</p>
-    </div>
-    <div class="device-grid">
-      {deviceList.map(([icon, name, text, status, frame], i) => (
-        <article class:list={['device f-card', icon === 'moreDevice' && 'soon']} data-reveal style={`--i:${i}`}>
-          <Pixel name={icon} scale={1.334} />
-          <h3 class="device-name">{tr(name)}</h3>
-          <p class="small muted">{tr(text)}</p>
-          <span class={`chip ${frame}`}>{tr(status)}</span>
-          {icon === 'moreDevice' && <a class="btn f-btn h-btnHot small" href={tr.path('/feedback/#feature')}>{tr('REQUEST A DEVICE')}</a>}
-        </article>
-      ))}
-    </div>
   </section>
 
   <!-- Games -->
@@ -347,13 +347,12 @@ const title = 'POKEDAISY'.split('');
           <a class="btn f-patreon h-patreonHot big" href={PATREON_URL}><Pixel name="patreon" scale={0.667} /> PATREON</a>
           <a class="btn f-coffee h-coffeeHot big" href={COFFEE_URL}><Pixel name="cup" scale={0.667} /> {tr('BUY ME A COFFEE')}</a>
         </div>
-        <p class="small muted">{tr('Bug reports, game requests and a star help just as much:')}</p>
+        <p class="small muted">{tr('Bug reports and game requests help just as much:')}</p>
         <div class="cta">
           <a class="btn f-btn h-btnHot small" href="/docs/"><Pixel name="guide" scale={0.5} /> {tr('READ THE MANUAL')}</a>
           <a class="btn f-btn h-btnHot small" href={tr.path('/feedback/#bug')}><Pixel name="bug" scale={0.667} /> {tr('REPORT A BUG')}</a>
           <a class="btn f-btn h-btnHot small" href={tr.path('/feedback/#game')}><Pixel name="logo" scale={0.334} /> {tr('REQUEST A GAME')}</a>
           <a class="btn f-btn h-btnHot small" href="/feedback/#feature"><Pixel name="guide" scale={0.5} /> {tr('SUGGEST A FEATURE')}</a>
-          <a class="btn f-btn h-btnHot small" href={REPO_URL}><Pixel name="star" scale={0.667} /> {tr('STAR ON GITHUB')}</a>
           <a class="btn f-reddit h-redditHot small" href={REDDIT_URL}><Pixel name="reddit" scale={0.5} /> {tr('JOIN r/POKEDAISY')}</a>
           <a class="btn f-discord h-discordHot small" href={DISCORD_URL}><Pixel name="discord" scale={0.5} /> {tr('JOIN THE DISCORD')}</a>
         </div>
@@ -363,8 +362,31 @@ const title = 'POKEDAISY'.split('');
 </Base>
 
 <style>
+  .thanks {
+    position: relative; overflow: hidden; color: #fff; background-color: #3d6fe0; /* PokeDaisy's blue in light and dark */
+    border-bottom: var(--px) solid var(--ink);
+    background-image: radial-gradient(rgba(255, 255, 255, 0.16) var(--px), transparent var(--px));
+    background-size: calc(var(--px) * 6) calc(var(--px) * 6);
+  }
+  .thanks-in { display: flex; align-items: center; justify-content: center; gap: 14px; min-height: 52px; padding: 8px 0; text-align: center; }
+  .thanks-text {
+    font-family: var(--font-pixel); font-size: var(--t-m); line-height: 1.15; letter-spacing: 0.0625em;
+    text-shadow: var(--bold), calc(var(--px) * 1) calc(var(--px) * 1) 0 rgba(29, 27, 38, 0.45);
+  }
+  .thanks-num { color: var(--yellow); }
+  .thanks-bloom, .thanks-heart { display: inline-flex; flex: none; animation: bob 1.2s var(--step) infinite; }
+  .thanks-heart { animation-delay: 0.6s; }
+  @media (max-width: 560px) {
+    .thanks-in { gap: 10px; }
+    .thanks-text { font-size: var(--t-s); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .thanks-bloom, .thanks-heart { animation: none; }
+  }
   /* Hero */
   .hero { display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center; padding: 64px 0 56px; }
+  /* Large screens: the words sit a little above the devices' middle (the margin lifts them half its height). */
+  @media (min-width: 1200px) { .hero-copy { margin-bottom: min(120px, 6vw); } }
   .hero-head { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
   .hero-mark { position: relative; width: max-content; }
   .mark-ball { display: inline-block; transform-origin: 50% 85%; animation: capture 3.2s steps(1) infinite 1.2s; }
@@ -392,15 +414,18 @@ const title = 'POKEDAISY'.split('');
     80% { transform: translateY(-4px); }
     100% { transform: none; opacity: 1; }
   }
-  .hero-lead { margin: 24px 0 32px; max-width: 30em; font-size: var(--t-l); line-height: 1.4; color: var(--ink-2); text-shadow: var(--bold); text-wrap: pretty; }
+  .hero-lead { margin: 22px 0 30px; max-width: 32em; font-size: calc(var(--r-l) * 1.1); line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
   @keyframes bob { 50% { transform: translateY(var(--px)); } }
   .cta { display: flex; flex-wrap: wrap; gap: 16px 20px; align-items: center; }
-  .ver { opacity: 0.85; font-size: var(--t-m); margin-left: 4px; }
-  .community { margin-top: 18px; }
+  .ver { opacity: 0.85; font-size: 0.85em; margin-left: 4px; }
+  /* The two community buttons as one pair: each as wide as the wider one. */
+  .community { margin-top: 18px; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: stretch; }
+  .community .btn { justify-content: center; }
+  .platforms, .downloads, .tick, .tab-name { font-family: var(--font-pixel); }
   .platforms { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); text-decoration: none; font-size: var(--t-s); letter-spacing: 0.0625em; }
   .platforms span { margin-left: 4px; }
   .platforms:hover span { color: var(--red); text-decoration: underline; }
-  /* Every APK download from GitHub releases: counted at build, refreshed in the browser. Big: it's the proof. */
+  /* Every file downloaded: GitHub's count plus the site's own, counted at build, refreshed in the browser. Big: it's the proof. */
   .downloads { display: inline-flex; align-items: center; gap: 14px; margin-top: 36px; text-decoration: none; color: var(--ink); }
   .downloads[hidden] { display: none; }
   .dl-count { font-size: calc(var(--t-xl) * 0.85); line-height: 1; text-shadow: var(--bold); letter-spacing: 0.0625em; }
@@ -420,7 +445,7 @@ const title = 'POKEDAISY'.split('');
   .glow { position: absolute; inset: -6% -4%; background: radial-gradient(closest-side, rgba(232, 48, 40, 0.18), rgba(61, 111, 224, 0.12) 60%, transparent); filter: blur(30px); }
 
   /* Ticker */
-  .ticker { background: var(--ink); color: #fff; overflow: hidden; border-block: var(--px) solid var(--ink); }
+  .ticker { background: var(--ink); color: var(--bg); overflow: hidden; border-block: var(--px) solid var(--ink); }
   .ticker-track { display: flex; width: max-content; animation: scroll 46s linear infinite; }
   .tick { display: inline-flex; align-items: center; gap: 24px; padding: 14px 12px 14px 24px; font-size: var(--t-m); white-space: nowrap; }
   @keyframes scroll { to { transform: translateX(-50%); } }
@@ -441,17 +466,21 @@ const title = 'POKEDAISY'.split('');
   .tabs-list { display: grid; gap: 4px; }
   .tab-item { display: grid; gap: 2px; text-align: left; font: inherit; color: inherit; background: none; border: 0; padding: 10px 14px; cursor: pointer; }
   .tab-name { display: flex; align-items: center; gap: 8px; font-size: var(--t-m); letter-spacing: 0.0625em; color: var(--muted); }
-  .tab-text { display: none; color: var(--ink-2); }
+  .tab-text { display: none; color: var(--ink-2); font-family: var(--font-read); line-height: 1.5; }
   .tab-item:hover .tab-name { color: var(--ink); }
-  .tab-item.on { background: var(--card, rgba(255, 255, 255, 0.7)); filter: var(--hard-shadow); }
-  .tab-item.on .tab-name { color: #cb0707; text-shadow: var(--bold); }
+  .tab-item.on { background: var(--card); filter: var(--hard-shadow); }
+  .tab-item.on .tab-name { color: var(--red); text-shadow: var(--bold); }
   .tab-item.on .fcur { width: calc(var(--px) * 5); animation: blink 0.6s steps(1) infinite; }
   .tab-item.on .tab-text { display: block; }
 
   /* EXPAND, one game at a time under tabs (the game pages' viewer). */
   .viewer { max-width: 1000px; margin: 0 auto; display: grid; gap: 18px; }
-  .viewer-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
-  .viewer-tabs .btn.on { color: var(--red); text-shadow: var(--bold); }
+  /* The games in even rows: four across (two rows of four), two across on a phone. */
+  .viewer-tabs { display: grid; grid-template-columns: repeat(4, auto); justify-content: center; gap: 14px; }
+  .viewer-tabs .btn { justify-content: center; white-space: nowrap; }
+  .viewer-tabs .btn.on { color: var(--red); }
+  @media (max-width: 560px) { .viewer-tabs { grid-template-columns: repeat(2, auto); } }
+  .viewer-more { justify-self: center; margin-top: 6px; }
   .viewer-screen { display: grid; padding: calc(var(--px) * 3); filter: var(--hard-shadow); }
   .viewer-screen img { grid-area: 1 / 1; display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; opacity: 0; transition: opacity 0.3s ease; }
   .viewer-screen img.on { opacity: 1; }
@@ -473,23 +502,22 @@ const title = 'POKEDAISY'.split('');
   /* Player */
   .player-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px 32px; }
   .player-item { display: flex; gap: 20px; align-items: flex-start; }
-  .player-icon { display: inline-flex; padding: calc(var(--px) * 3); filter: var(--hard-shadow); transition: transform 0.2s steps(2); }
+  .player-item p { line-height: 1.5; }
+  /* Every icon in a box of one size (its frame 3 units a side), centred in it. */
+  .player-icon {
+    display: inline-flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box;
+    width: calc(var(--px) * 22); height: calc(var(--px) * 22); padding: 0;
+    filter: var(--hard-shadow); transition: transform 0.2s steps(2);
+  }
   .player-item:hover .player-icon { transform: rotate(-8deg) translateY(calc(var(--px) * -2)); }
   .player-name { font-size: var(--t-m); margin-bottom: 6px; text-shadow: var(--bold); letter-spacing: 0.0625em; }
 
-  /* Devices */
-  .device-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 24px; }
-  .device { display: grid; gap: 10px; align-content: start; justify-items: start; filter: var(--hard-shadow); padding: calc(var(--px) * 7); }
-  .device.soon { background: none; }
-  .device.soon .device-name { color: var(--muted); }
-  .device-name { font-size: var(--t-m); text-shadow: var(--bold); letter-spacing: 0.0625em; }
-
   /* Release */
   .release { filter: var(--hard-shadow); display: grid; gap: 24px; padding: calc(var(--px) * 9); }
-  .highlights { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; font-size: var(--t-s); color: var(--ink-2); }
+  .highlights { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; font-size: var(--r-m); color: var(--ink-2); }
   .highlights li { position: relative; padding-left: calc(var(--px) * 7); }
   .highlights li::before { content: ''; position: absolute; left: 0; top: 0.6em; width: calc(var(--px) * 3); height: calc(var(--px) * 3); background: var(--red); }
-  .highlights :global(strong) { color: var(--ink); font-weight: normal; }
+  .highlights :global(strong) { color: var(--ink); font-weight: 700; }
 
   /* Support */
   .support { display: grid; grid-template-columns: auto 1fr; gap: 48px; align-items: center; filter: var(--hard-shadow); padding: calc(var(--px) * 12); background: none; }
@@ -504,12 +532,19 @@ const title = 'POKEDAISY'.split('');
   }
   @media (max-width: 960px) {
     .hero, .demo-block, .demo-block.flip, .tabs-view { grid-template-columns: 1fr; }
-    .demo-block.flip .demo-copy { order: -1; }
+    .demo-block .demo-copy { order: -1; }
+    .demo-block, .tabs-view { gap: 24px; }
     .hero { padding-top: 40px; }
     .support { grid-template-columns: 1fr; padding: calc(var(--px) * 8); }
   }
   @media (max-width: 760px) {
-    .hero-lead { font-size: var(--t-m); }
+    .hero-lead { font-size: var(--r-l); }
+    .hero { padding: 28px 0 36px; gap: 28px; }
+    .viewer-tabs { gap: 10px; }
+    .more-link { margin-top: 28px; }
+    .player-grid { gap: 24px; }
+    .downloads { margin-top: 24px; }
+    .release { padding: calc(var(--px) * 6); }
   }
   @media (max-width: 560px) {
     .player-grid { grid-template-columns: 1fr; }
@@ -517,7 +552,6 @@ const title = 'POKEDAISY'.split('');
 </style>
 
 <script>
-  import { apkDownloads } from '../lib/releases.js';
 
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -574,18 +608,20 @@ const title = 'POKEDAISY'.split('');
     clips.forEach((v) => watch.observe(v));
   }
 
-  // The download count, fresh from GitHub (the build's number stays if that fails or is rate-limited).
-  const dl = document.querySelector<HTMLElement>('[data-downloads]');
-  fetch('https://api.github.com/repos/lidor30/pokedaisy/releases?per_page=100', { headers: { Accept: 'application/vnd.github+json' } })
-    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-    .then((list: any[]) => {
-      const n = apkDownloads(list);
-      if (dl && n > Number(dl.querySelector('[data-downloads-count]')!.textContent!
-        .replace(/\D/g, ''))) {
-        dl.querySelector('[data-downloads-count]')!.textContent = n.toLocaleString(document.documentElement.lang);
-        dl.hidden = false;
-      }
-    })
-    .catch(() => {});
 
+  // The download count, fresh from the site's counter (the build's number stays if that fails).
+  const dl = document.querySelector<HTMLElement>('[data-downloads]');
+  if (dl) {
+    fetch(dl.dataset.countApi!)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((c: { site?: number }) => {
+        const n = Number(dl.dataset.downloads) + (Number(c.site) || 0);
+        const shown = dl.querySelector('[data-downloads-count]')!;
+        if (n > Number(shown.textContent!.replace(/\D/g, ''))) {
+          shown.textContent = n.toLocaleString(document.documentElement.lang);
+          dl.hidden = false;
+        }
+      })
+      .catch(() => {});
+  }
 </script>

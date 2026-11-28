@@ -61,13 +61,21 @@ object Gen5Text {
                     }
                     return sb.toString()
                 }
-                0x246D -> sb.append('♂')
-                0x246E -> sb.append('♀')
-                else -> sb.append(c.toChar())
+                else -> sb.append(char(c))
             }
             j++
         }
         return sb.toString()
+    }
+
+    /**
+     * One of the game's text codes as a character: UTF-16, but ♂ / ♀ are 0x246D / 0x246E (Unicode's circled 14 / 15),
+     * in the message files and in a Pokémon's nickname alike (a party NIDORAN♂ read "⑭").
+     */
+    fun char(code: Int): Char = when (code) {
+        0x246D -> '♂'
+        0x246E -> '♀'
+        else -> code.toChar()
     }
 
     private fun u16(b: ByteArray, o: Int) = (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8)

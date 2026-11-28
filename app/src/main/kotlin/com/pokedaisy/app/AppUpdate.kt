@@ -57,7 +57,8 @@ class AppUpdateFlow(private val activity: ComponentActivity) {
         if (checking) return
         checking = true
         Thread({
-            val found = AppUpdater.check(BuildConfig.VERSION_NAME)
+            val betas = Prefs(activity).betaUpdates(runningBeta = '-' in BuildConfig.VERSION_NAME)
+            val found = AppUpdater.check(BuildConfig.VERSION_NAME, betas)
             // The Hasep fork: say once per version when PokeDaisy itself has moved on (a merge to ask for).
             val upstream = if (found == null) AppUpdater.checkUpstream(BuildConfig.UPSTREAM_VERSION) else null
             // An APK we already offered is spent once it's installed (or abandoned) - but the one for the

@@ -6,12 +6,12 @@ order: 2
 keywords: [download, apk, sideload, 32-bit, armv7, older tablet, setup, first time, onboarding, permission, storage, update, upgrade, new version, unknown sources, wizard]
 ---
 
-PokeDaisy isn't on the Play Store. You install it from its GitHub page as an APK file, and the app then keeps itself up to date. The whole thing takes a few minutes.
+PokeDaisy isn't on the Play Store. You install it from [its website](https://pokedaisy.com/) as an APK file, and the app then keeps itself up to date. The whole thing takes a few minutes.
 
 ## Download and install the APK
 
-1. On the device, open the [latest release](https://github.com/lidor30/pokedaisy/releases/latest) in a browser.
-2. Under **Assets**, tap `PokeDaisy-<version>.apk` to download it. The same file works on every device, including older tablets running a 32-bit Android.
+1. On the device, open the [Android download on PokeDaisy's site](https://pokedaisy.com/#download-android) in a browser.
+2. Tap `PokeDaisy-<version>.apk` to download it. The same file works on every device, including older tablets running a 32-bit Android.
 3. Open the downloaded file (from the browser's download notice, or your file manager's Downloads folder).
 4. If Android says it isn't allowed to install apps from this source, tap through to its settings, allow it for your browser or file manager, and go back. Then tap **Install**.
 5. Open PokeDaisy.
@@ -28,6 +28,8 @@ Everything you pick here can be changed later in Settings, so don't overthink it
 ### Step 1: your ROMs folders
 
 If you keep your games in folders (say `ROMs/gba` and `ROMs/nds`), point PokeDaisy at them here. Tap `CHOOSE FOLDER` and pick a folder, then `ADD FOLDER` for each other one. PokeDaisy looks through them (`LOOKING FOR GAMES…`), then lists what it found under `FOUND 3 GAMES` or similar. `REMOVE` beside a folder takes it off again.
+
+While PokeDaisy is looking for games, wait for the scan to finish before going back or continuing setup.
 
 Pick just the folders your games are in rather than one big folder of everything: there's less to look through, so it's quicker.
 
@@ -97,12 +99,12 @@ Then pick a game and play. [Your game library](library.md) is the next page.
 PokeDaisy checks for a new version each time you open the library. When there is one, it shows `UPDATE AVAILABLE` with what's new:
 
 - `UPDATE` downloads the new APK and opens Android's installer. Tap **Update** there. If Android asks to allow installs from PokeDaisy, allow it and go back.
-- `RELEASE PAGE` opens the release on GitHub.
+- `RELEASE PAGE` opens the release on PokeDaisy's releases page.
 - `LATER` puts it off until the next time you open the library.
 
 Updating keeps everything: your library, saves, states and settings.
 
-The first time you open the library after an update, `WHAT'S NEW` shows the main changes in that version, once. `RELEASE PAGE` opens the full notes on GitHub and `OK` closes it.
+The first time you open the library after an update, `WHAT'S NEW` shows the main changes in that version, once. `RELEASE PAGE` opens the full notes on the website and `OK` closes it.
 
 ![The UPDATE AVAILABLE window in the library, with release notes and LATER, RELEASE PAGE and UPDATE buttons](shots/library-update.png "An update offer")
 
@@ -110,3 +112,12 @@ To check right now, open Settings and tap `VERSION` (in the `APP` group). It sho
 
 > [!TIP]
 > If an update keeps downloading but never installs, check that PokeDaisy is allowed to install apps (Android's settings, **Apps**, PokeDaisy, **Install unknown apps**). [Troubleshooting](troubleshooting.md) has more.
+
+### Beta versions
+
+Before a version goes out to everyone, it comes out as a beta (and then a release candidate, a beta that's nearly done) for a few days, so problems on devices like yours show up early. Anyone can try them: turn on Settings > `BETA UPDATES` (in the `APP` group) and the update offer includes betas too.
+
+- A beta can have bugs the full version won't. Your saves are kept the same way, but it's a good idea to keep a backup of the games you care about.
+- Tell us what you find in the PokeDaisy Discord: pick the beta tester role to see the beta channels. Turning on `CRASH REPORTS` helps a lot too.
+- Turning `BETA UPDATES` off doesn't take you back. You stay on the beta you have until the full version comes out, and then you get that as usual.
+- If you install a beta by hand, `BETA UPDATES` is on for you until you turn it off.

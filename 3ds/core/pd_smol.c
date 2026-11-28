@@ -52,7 +52,8 @@ static int next(struct reader* r, const struct tans* table) {
 }
 
 // Runs the instruction bytes `lo` over the symbols into words[] (static, shared); the u16 count, or -1 if malformed.
-static uint16_t words[(8192 + 2) / 2 + 2];
+// imageSize is 14 bits, so a blob can decode to 16383 * 4 = 65532 bytes: 32766 u16s, plus the one the loop can add.
+static uint16_t words[32768];
 
 static size_t instructions(const uint8_t* lo, size_t loSize, const uint16_t* sym, size_t symSize, size_t outBytes) {
     // lo holds (length, offset) pairs, 7 bits per byte + continue bit. A nonzero length emits one symbol, then copies
@@ -100,7 +101,7 @@ size_t pd_smol(const uint8_t* src, size_t avail, uint8_t* out, size_t outCap) {
     size_t imageSize = h0 >> 4 & 0x3FFF, symSize = h0 >> 18 & 0x3FFF;
     size_t bitstreamSize = h1 >> 6 & 0x1FFF, loSize = h1 >> 19 & 0x1FFF;
     size_t outBytes = imageSize * 4;
-    if (mode < 1 || mode > 6 || !loSize || !symSize || loSize > LO_MAX || outBytes > 8192 || outBytes > outCap) return 0;
+    if (mode < 1 || mode > 6 || !loSize || !symSize || loSize > LO_MAX || outBytes > outCap) return 0;
 
     const size_t data = 8;
     bool loEncoded = mode >= 4, symEncoded = mode == 2 || mode == 3 || mode >= 5, symDelta = mode == 3 || mode == 6;

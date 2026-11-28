@@ -1,14 +1,23 @@
 ---
 // The ROM check: reads a dropped ROM in the browser (never uploaded) and judges it with
-// src/lib/compat.js - the app's CompanionSupport rules over compat.json.
+// src/lib/compat.js - the app's CompanionSupport rules over compat.json, plus what the newest beta reads on top
+// (beta.js; carried in data-beta): such a game is SUPPORTED IN BETA, with the way to get the beta (BetaModal.astro).
 import Pixel from './Pixel.astro';
 import { trFor } from '../i18n/index.js';
+import { getBeta } from '../lib/betaRelease.js';
+import { FRAMES } from '../lib/pixel.js';
 
 const tr = trFor(Astro.url);
+const beta = await getBeta();
+// The answer's window stays the game's light one in dark mode too, so its stamps keep their light pills (a dark
+// page's pills are dark inside: themes.js' DARK_PILLS).
+const lightStamps = ['pillGreen', 'pillRed', 'pillYellow']
+  .map((name) => `.romcheck .result .stamp.f-${name}{border-image-source:${FRAMES[name].url};color:#3c3b45}`).join('\n');
 // What the script below writes, already in the page's language ({name}s filled in there).
 const strings = {
   'supported-version': tr('The companion knows this exact version of {title}. Party, battles, map and more, on a second screen or beside the game.'),
   supported: tr('The companion reads {title}. Party, battles, map and more, on a second screen or beside the game.'),
+  beta: tr('The companion reads {title} from the beta on ({beta}). The version everyone gets doesn\'t yet, so install the beta to use it.'),
   'unknown-hack': tr('A {base}-based ROM hack we don\'t know yet. It still plays, but the companion screen only says "not supported". Ask for it below!'),
   'in-progress': tr('{title} {version} plays in PokeDaisy, but its companion is still being built. It\'s coming!'),
   'retail-hack': tr('A ROM hack built on {base}. Only the original game is supported so far.'),
@@ -21,6 +30,8 @@ const strings = {
   'not-a-rom': tr('This doesn\'t look like a Game Boy, GBA or DS ROM.'),
   error: tr('Couldn\'t read that file: {error}'),
   SUPPORTED: tr('SUPPORTED'),
+  'IN THE BETA': tr('IN THE BETA'),
+  'GET THE BETA': tr('GET THE BETA'),
   'NOT YET': tr('NOT YET'),
   ERROR: tr('ERROR'),
   'BASED ON': tr('BASED ON'),
@@ -34,7 +45,7 @@ const strings = {
   AGAIN: tr('DROP ANOTHER ROM'),
 };
 ---
-<div class="romcheck" data-t={JSON.stringify(strings)} data-feedback={tr.path('/feedback/')}>
+<div class="romcheck" data-t={JSON.stringify(strings)} data-feedback={tr.path('/feedback/')} data-beta={JSON.stringify(beta?.add ?? null)}>
   <label class="drop f-card" data-drop>
     <input type="file" accept=".gba,.gb,.gbc,.nds,.zip,.7z" hidden data-file />
     <span class="drop-art"><Pixel name="logo" scale={2} /></span>
@@ -51,6 +62,7 @@ const strings = {
   </div>
 </div>
 
+<style is:global set:html={lightStamps}></style>
 <style is:global>
   .romcheck { display: grid; gap: 28px; }
   .drop {
@@ -75,10 +87,11 @@ const strings = {
     78% { transform: rotate(-8deg); }
     86% { transform: rotate(0); }
   }
-  .drop-title { font-size: var(--t-l); margin-top: 8px; text-shadow: var(--bold); letter-spacing: 0.0625em; }
+  .drop-title { font-family: var(--font-pixel); font-size: var(--t-l); margin-top: 8px; text-shadow: var(--bold); letter-spacing: 0.0625em; }
   .drop-lock { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--green); }
 
-  .result { padding: calc(var(--px) * 2) calc(var(--px) * 3); color: #575656; text-shadow: var(--px) var(--px) 0 #c8c7bf; }
+  /* The answer in the game's own window, in its pixel font. */
+  .result { font-family: var(--font-pixel); font-size: var(--t-m); padding: calc(var(--px) * 2) calc(var(--px) * 3); color: #575656; text-shadow: var(--px) var(--px) 0 #c8c7bf; }
   .result.in { animation: open 0.42s var(--step) forwards; }
   .verdict { display: flex; align-items: center; gap: 16px; font-size: var(--t-l); margin-bottom: 8px; }
   .verdict .stamp { padding: 0 12px; text-shadow: none; }
@@ -92,13 +105,14 @@ const strings = {
 </style>
 
 <script>
-  import data from '../data/compat.json';
+  import release from '../data/compat.json';
   import { checkFile } from '../lib/compat.js';
+  import { withBeta } from '../lib/beta.js';
   import { track } from '../lib/analytics.js';
   import { fill } from '../i18n/fill.js';
 
   // Which message a verdict gets (its text comes from the page: data-t).
-  const message = (v: any) => (v.status === 'unsupported' ? v.reason : v.version ? 'supported-version' : 'supported');
+  const message = (v: any) => (v.status === 'unsupported' ? v.reason : v.beta ? 'beta' : v.version ? 'supported-version' : 'supported');
   const STAMPS: Record<string, [string, string]> = {
     supported: ['SUPPORTED', 'f-pillGreen'],
     unsupported: ['NOT YET', 'f-pillRed'],
@@ -106,6 +120,7 @@ const strings = {
 
   for (const root of document.querySelectorAll<HTMLElement>('.romcheck')) {
     const t: Record<string, string> = JSON.parse(root.dataset.t!);
+    const data = withBeta(release, JSON.parse(root.dataset.beta!));
     const drop = root.querySelector<HTMLElement>('[data-drop]')!;
     const input = root.querySelector<HTMLInputElement>('[data-file]')!;
     const dropText = root.querySelector<HTMLElement>('[data-drop-text]')!;
@@ -151,7 +166,7 @@ const strings = {
       try {
         const r: any = await checkFile(data, file.name, new Uint8Array(await file.arrayBuffer()));
         const v = r.verdict;
-        const [stampText, stampFrame] = STAMPS[v.status];
+        const [stampText, stampFrame] = v.beta ? ['IN THE BETA', 'f-pillYellow'] : STAMPS[v.status];
         const stamp = document.createElement('span');
         stamp.className = `stamp chip ${stampFrame}`;
         stamp.textContent = t[stampText];
@@ -166,6 +181,14 @@ const strings = {
         messageEl.textContent = fill(t[message(v)], { ...r, ...v });
         // The verdict alone: never the file's name, code or hash.
         track('rom_check', { verdict: v.status, reason: v.reason });
+        if (v.beta) {
+          const get = document.createElement('button');
+          get.type = 'button';
+          get.className = 'btn f-primary h-primaryHot small';
+          get.setAttribute('data-beta-open', '');
+          get.textContent = t['GET THE BETA'];
+          actions.append(get);
+        }
         if (r.sha1 && (['unknown-hack', 'retail-hack', 'revision', 'other-game', 'gb', 'ds'].includes(v.reason))) {
           actions.append(formLink(r));
         }

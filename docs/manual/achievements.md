@@ -28,7 +28,7 @@ You sign in on the top screen because typing needs a keyboard, and the bottom sc
 
 RetroAchievements recognises a ROM by its exact contents, so only ROMs it knows have achievements. The retail games (FireRed, Emerald and the others) have sets, as do some popular hacks like Unbound. A patched or rebuilt ROM usually doesn't, even if it's based on a game that does.
 
-This works with any game, not only the ones the companion supports, and with Game Boy and DS games too.
+This works with any game, not only the ones the companion supports, and with Game Boy and DS games too. A DS game has the same achievements whether you keep its ROM loose or in an archive.
 
 To check a game before playing it, long-press it in the library and open `INFO`. Its RetroAchievements section says whether there's a set for that exact ROM and, when you're signed in, how many achievements you've unlocked in it. See [Library](library.md).
 
@@ -55,6 +55,8 @@ The funnel button opens a filter: `SHOW ALL`, `LOCKED ONLY` or `UNLOCKED ONLY`.
 
 If the tab says `NO ACHIEVEMENTS FOR THIS ROM`, RetroAchievements doesn't know this exact file. It shows the ROM's hash, which you can look up on the site.
 
+If it says `NO ACHIEVEMENTS YET`, RetroAchievements knows the game, but nobody has made achievements for it so far.
+
 ## Popups
 
 Achievement news pops up at the top of the companion, over whatever tab you're on:
@@ -62,7 +64,7 @@ Achievement news pops up at the top of the companion, over whatever tab you're o
 - `ACHIEVEMENT UNLOCKED`, with its badge and points, and the level-up fanfare from the games plays.
 - `GAME COMPLETE` when you've unlocked every achievement in the set.
 - How many you've unlocked so far, when a game starts.
-- `PROGRESS` when you get closer to one that counts something.
+- `PROGRESS` when you get further than before on one that counts something (a count that drops and comes back says nothing new).
 - `LEADERBOARD` when a leaderboard attempt starts or ends.
 - Connection notices, when the site can't be reached.
 

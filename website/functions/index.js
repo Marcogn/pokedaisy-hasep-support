@@ -10,11 +10,13 @@
 //   firebase functions:secrets:set GITHUB_TOKEN
 //   firebase deploy --only functions,firestore:rules
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import { initializeApp } from 'firebase-admin/app';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { clean, validate, linkCount, toPost } from './feedback-form.js';
+import { SHARDS, filesOrigin, parseDownload, filePath, fileKey, sumShards } from './downloads.js';
 
 initializeApp();
 
@@ -96,3 +98,46 @@ async function createDiscussion(post) {
   }
   return discussion;
 }
+
+// The download counter (downloads.js): /dl/<tag>/<file> counts and redirects to the file, /api/downloads/v1/count.json
+// sums the counts. Both are Hosting rewrites to this one function (firebase.json).
+/** Where downloads go now: FILES_ORIGIN, or the r2.dev fallback while it lasts (downloads.js). */
+const files = () => process.env.FILES_ORIGIN || filesOrigin();
+/** Whether a release file is in the bucket, by a HEAD of it, remembered a while per instance. */
+const seen = new Map();
+async function inBucket(path) {
+  const hit = seen.get(path);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.ok;
+  let ok = false;
+  try { ok = (await fetch(files() + path, { method: 'HEAD', redirect: 'manual' })).status === 200; } catch {}
+  seen.set(path, { ok, at: Date.now() });
+  return ok;
+}
+
+export const downloads = onRequest({ region: 'us-central1', maxInstances: 10, concurrency: 80 }, async (req, res) => {
+  if (req.path === '/api/downloads/v1/count.json') {
+    try {
+      const snap = await getFirestore().collection('downloadCounts').get();
+      const sum = sumShards(snap.docs.map((d) => d.data()));
+      res.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+      res.json({ site: sum.total, tags: sum.tags, files: sum.files });
+    } catch (e) {
+      logger.error('download count', e);
+      res.set('Cache-Control', 'no-store').status(503).json({ error: 'unavailable' });
+    }
+    return;
+  }
+  const dl = parseDownload(req.path);
+  res.set('Cache-Control', 'no-store');
+  if (!dl) { res.status(404).send('Not found'); return; }
+  const path = filePath(dl);
+  // The download never waits on a failed count: the file is served whatever happens here.
+  // Only a real download counts (a HEAD, a link checker's look, doesn't).
+  if (req.method === 'GET' && dl.counts && await inBucket(path)) {
+    const shard = getFirestore().collection('downloadCounts').doc(String(Math.floor(Math.random() * SHARDS)));
+    try {
+      await shard.set({ total: FieldValue.increment(1), files: { [fileKey(dl)]: FieldValue.increment(1) } }, { merge: true });
+    } catch (e) { logger.error('download count', e); }
+  }
+  res.redirect(302, files() + path);
+});

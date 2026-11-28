@@ -19,7 +19,7 @@ PokeDaisy also runs on Linux: on a Steam Deck, a Linux PC and Linux handhelds su
 
 ## Which file to download
 
-Open the [PokeDaisy releases page](https://github.com/lidor30/pokedaisy/releases) and, under the newest release that has Linux files, download the one for your device:
+Open the [Linux downloads on PokeDaisy's site](https://pokedaisy.com/#download-linux) and download the file for your device:
 
 | Your device | Download |
 | --- | --- |
@@ -65,8 +65,8 @@ The app keeps everything in its own folder and runs fullscreen. On CrossMix it r
 ## Handhelds with PortMaster
 
 1. Extract `pokedaisy-portmaster-aarch64.zip` on your computer. Inside are `PokeDaisy.sh` and a `pokedaisy` folder.
-2. Copy both into your firmware's `ports` folder on the SD card.
-3. Your games can stay where they are: the game list shows `ports/pokedaisy/roms` and the firmware's own `gba`, `gb`, `gbc` and `nds` folders (and the ones named `Game Boy Advance`, `Game Boy Color`, `Game Boy` and `Nintendo DS`).
+2. Copy both into your firmware's `ports` folder on the SD card. On muOS they go to two folders: `PokeDaisy.sh` into `ROMS/Ports`, and the `pokedaisy` folder into `ports`, both at the top of the card.
+3. Your games can stay where they are: the game list shows `ports/pokedaisy/roms` and the firmware's own `gba`, `gb`, `gbc` and `nds` folders (and the ones named `Game Boy Advance`, `Game Boy Color`, `Game Boy` and `Nintendo DS`), at the top of the card or in its `ROMS` folder (muOS: `ROMS/GBA`).
 4. Start PokeDaisy from the Ports list.
 
 PortMaster tells PokeDaisy your device's buttons, so they work without setup. The Menu or Guide button opens PokeDaisy's menu, and SELECT and START together quit, as in any port. It has been played on a GKD 350H running ROCKNIX.
@@ -96,7 +96,7 @@ On [plorpOS](https://github.com/thwonp/plorpos) and the nightly builds of [spruc
 
 ## Bring your saves
 
-In the PokeDaisy program (the first three downloads), a game's save is in the `saves` folder next to `roms`, named after the whole ROM file name plus `.sav`: for `FireRed.gba` that's `saves/FireRed.gba.sav`. A save from another emulator works when you copy it there under that name, a RetroArch `.srm` included. Keep a copy of your old save somewhere else first.
+In the PokeDaisy program (the first three downloads), a game's save is in the `saves` folder next to `roms`, named after the whole ROM file name plus `.sav`: for `FireRed.gba` that's `saves/FireRed.gba.sav`. A save from another emulator works when you copy it there under that name, a RetroArch `.srm` included. A save named after the ROM without its extension works too, the way other emulators make them: `saves/FireRed.sav` is used for `FireRed.gba` when `saves/FireRed.gba.sav` isn't there, so there's no need to rename it. Keep a copy of your old save somewhere else first.
 
 Before a game opens, PokeDaisy copies its save to `saves/pokedaisy-backups` and keeps the newest 10 copies, so an older one is there if you need it. Save states from another emulator don't load.
 
@@ -112,7 +112,7 @@ Download the newer zip and extract it over the old folder (on NXRedux, at the to
 - **An error naming `GLIBC_2.35` or `libSDL2`:** your Linux is older than PokeDaisy needs, or SDL2 isn't installed. Install SDL2 from your distribution (on Ubuntu, `sudo apt install libsdl2-2.0-0`), or try a newer system.
 - **A game isn't listed:** it has to be right in `roms` (not in a folder inside it), unzipped, and end in `.gba`, `.gb`, `.gbc` or `.nds`.
 - **A and B are the wrong way round:** open the menu (START and SELECT together, or the Guide or Menu button) and set `A/B BUTTONS` to `SWAPPED`.
-- **My save didn't load:** the save needs the ROM's whole file name with `.sav` added, in `saves`. Check `saves/pokedaisy-backups` for an older copy.
+- **My save didn't load:** the save needs the ROM's whole file name with `.sav` added, or the ROM's name without its extension (the way other emulators name them), in `saves`. Check `saves/pokedaisy-backups` for an older copy.
 - **The controller does nothing:** SDL doesn't know it yet. Put a `gamecontrollerdb.txt` with its mapping in the data folder (next to `roms`).
 
 Still stuck? [Tell us](https://pokedaisy.com/feedback/#bug) which device and file you used. Started from a terminal, PokeDaisy prints what happened there; the TrimUI app writes it to `launch.log` and the PortMaster port to `log.txt`, both in its folder.

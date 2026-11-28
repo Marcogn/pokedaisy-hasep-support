@@ -463,7 +463,7 @@ int pk_ndsd_state_matches_save(const char* path)
     u32 header[4];
     bool ok = fread(header, sizeof(header), 1, f) == 1;
     fclose(f);
-    if (ok && header[0] == PK_NDS_STATE_MAGIC_MELONDS) return 2;   // melonDS's: never loaded here
+    if (ok && (header[0] == PK_NDS_STATE_MAGIC_MELONDS || header[0] == PK_NDS_STATE_MAGIC_BANANADS)) return 2;   // another core's: never loaded here
     if (!ok || header[0] != STATE_MAGIC || header[3] == 0) return -1;
     if (d->savePath.empty() || d->saveReadOnly) return 1;
     std::vector<u8> file;
@@ -515,9 +515,7 @@ int pk_ndsd_field_bits(void)
     int bits = pk_nds_field_state(d->field, mainRead32, mainWrite32, d->wildOff);
     bits |= pk_nds_field_screen_touch(d->field, bits, n.gpu.engine[0].dispcnt());
     const bool darkTop = oneColour(d->top), darkBottom = oneColour(d->bottom);
-    if (darkTop && !darkBottom) bits |= PK_NDS_FIELD_TOUCH;
-    if (darkTop) bits |= PK_NDS_FIELD_DARK_TOP;
-    if (darkBottom) bits |= PK_NDS_FIELD_DARK_BOTTOM;
+    bits = pk_nds_field_screen_bits(bits, darkTop, darkBottom);
     if (!(bits & PK_NDS_FIELD_MENU)) d->menuLitFrames = 0;
     else if (!darkTop || !darkBottom) d->menuLitFrames++;
     else if (d->keepStartMenu && d->menuLitFrames > 0) pk_nds_field_keep_start_menu(d->field, mainRead32, mainWrite32);
@@ -537,12 +535,17 @@ void pk_ndsd_set_wild_off(bool off)
     if (d) d->wildOff = off;
 }
 
+bool pk_ndsd_code_write(uint32_t, const uint8_t*, int) { return false; }
+
 void pk_ndsd_set_keep_start_menu(bool on)
 {
     if (d) d->keepStartMenu = on;
 }
 
 void pk_ndsd_set_cpu_boost(bool) {}
+
+// EXP SHARE: melonDS's alone (its FULL EXP patches the battle overlay's code, which DSperate's recompiler wouldn't see).
+void pk_ndsd_set_exp_share(int, uint32_t) {}
 
 int pk_ndsd_set_cheats(const uint32_t* words, int nWords, const int32_t* lengths, int nCheats)
 {

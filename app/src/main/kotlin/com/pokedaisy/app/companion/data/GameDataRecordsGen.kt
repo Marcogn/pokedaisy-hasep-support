@@ -1519,6 +1519,24 @@ val POKEDEX_FIRERED_REV1: PokedexTables by lazy {
     )
 }
 
+// FireRed 1.0 (retail rev 0): rev 1's tables, found in the rev 0 cart. Everything up to the footprints sits 0x70
+// lower than in rev 1, the dex entries and the TM / HM move list 0x60 lower (BULBASAUR's entry: SEED, 0.7 m, 6.9 kg;
+// FOCUS PUNCH, DRAGON CLAW, WATER PULSE first).
+val POKEDEX_FIRERED_REV0: PokedexTables by lazy {
+    PokedexTables(
+        entries = 0x0844E850L,
+        frontPics = 0x082350ACL,
+        palettes = 0x0823730CL,
+        speciesInfo = 0x08254784L,
+        speciesToNational = 0x08251FEEL,
+        abilityNames = 0x0824FC40L,
+        footprints = 0x0843FAB0L,
+        evolutions = 0x08259754L,
+        tmhmLearnsets = 0x08252BC8L,
+        tmhmMoves = 0x0845A5A4L,
+    )
+}
+
 // LeafGreen: FireRed's layout, its own tables (and dex text).
 val POKEDEX_LEAFGREEN_REV0: PokedexTables by lazy {
     PokedexTables(
@@ -1556,6 +1574,16 @@ val GUIDE_TABLES_FIRERED_REV1: GuideTables by lazy {
         learnsets = 0x0825D824L,
         wildHeaders = 0x083C9D28L,
         mapGroups = 0x08352718L,
+    )
+}
+
+// FireRed 1.0: rev 1's, each 0x70 lower (BROCK is trainer 414 there too).
+val GUIDE_TABLES_FIRERED_REV0: GuideTables by lazy {
+    GuideTables(
+        trainers = 0x0823EAC8L,
+        learnsets = 0x0825D7B4L,
+        wildHeaders = 0x083C9CB8L,
+        mapGroups = 0x083526A8L,
     )
 }
 
@@ -2555,5 +2583,102 @@ val FLASH_RECHARGED_EMERALD_REBALANCED_V2_2_8: FlashFns by lazy {
         codeCrcs = listOf(0x6DE8DF3FL, 0xB135D945L, 0x250CAFA5L, 0x6ACA142FL),
         monMoveField = 22,
         monEggField = 54,
+    )
+}
+
+// ---- gamedata/gen3/records/ruby_sapphire.toml ----
+
+// TMs from the bag on Ruby / Sapphire (TmTeach.kt, 2026-11-18): pret's pokeruby symbols (rev 1 = rev 2), the bag's own way into
+// the party menu (item_use.c's SetPokemonItemUseAndFadeOut, pokemon_menu.c's sub_808B020), its fixed way back to the bag
+// (sub_80A5B40) swapped for CB2_ReturnToField. gMain.callback2 = gMain (0x03001770) + 4.
+val TM_RUBY: TmFns by lazy {
+    TmFns(
+        specialVarItemId = 0x0203855EL,
+        itemUseType = 0x02038561L,
+        itemUseCb = 0x03004AE4L,
+        itemUseCbTmhm = 0x0806F08CL,
+        showPartyMenuForItemUse = 0x0808B040L,
+        partyMenu = 0,
+        partyMenuSlotOff = 0,
+        initPartyMenu = 0x0808AFA0L,
+        mainCallback2 = 0x03001774L,
+        setMainCallback2 = 0x080003CCL,
+        returnToField = 0x08054604L,
+        cleanupOverworld = 0,
+        fadeScreen = 0x0807D664L,
+        lockControls = 0x08065550L,
+        unlockControls = 0x0806555CL,
+        bagReturn = 0x080A5B60L,
+        overworld = 0x080543C4L,
+        codeCrcs = listOf(0xD38FC57EL, 0x2A0A6EBDL, 0x5F206B87L, 0x37AB1053L, 0xD8C6E030L, 0xF9959006L, 0xA003C21AL, 0x9807B468L),
+    )
+}
+
+val TM_RUBY_REV0: TmFns by lazy {
+    TmFns(
+        specialVarItemId = 0x0203855EL,
+        itemUseType = 0x02038561L,
+        itemUseCb = 0x03004AE4L,
+        itemUseCbTmhm = 0x0806F06CL,
+        showPartyMenuForItemUse = 0x0808B020L,
+        partyMenu = 0,
+        partyMenuSlotOff = 0,
+        initPartyMenu = 0x0808AF80L,
+        mainCallback2 = 0x03001774L,
+        setMainCallback2 = 0x080003CCL,
+        returnToField = 0x080545E4L,
+        cleanupOverworld = 0,
+        fadeScreen = 0x0807D644L,
+        lockControls = 0x08065530L,
+        unlockControls = 0x0806553CL,
+        bagReturn = 0x080A5B40L,
+        overworld = 0x080543A4L,
+        codeCrcs = listOf(0xD38FC57EL, 0x2A0A6EBDL, 0x5F206B87L, 0x37AB1053L, 0x83716810L, 0xF9959006L, 0xA003C21AL, 0x9807B468L),
+    )
+}
+
+val TM_SAPPHIRE: TmFns by lazy {
+    TmFns(
+        specialVarItemId = 0x0203855EL,
+        itemUseType = 0x02038561L,
+        itemUseCb = 0x03004AE4L,
+        itemUseCbTmhm = 0x0806F090L,
+        showPartyMenuForItemUse = 0x0808B040L,
+        partyMenu = 0,
+        partyMenuSlotOff = 0,
+        initPartyMenu = 0x0808AFA0L,
+        mainCallback2 = 0x03001774L,
+        setMainCallback2 = 0x080003CCL,
+        returnToField = 0x08054608L,
+        cleanupOverworld = 0,
+        fadeScreen = 0x0807D664L,
+        lockControls = 0x08065554L,
+        unlockControls = 0x08065560L,
+        bagReturn = 0x080A5B60L,
+        overworld = 0x080543C8L,
+        codeCrcs = listOf(0xD38FC57EL, 0x2A0A6EBDL, 0x9F85C0F2L, 0x37AB1053L, 0xD3B01134L, 0xF9959006L, 0xA003C21AL, 0x9807B468L),
+    )
+}
+
+val TM_SAPPHIRE_REV0: TmFns by lazy {
+    TmFns(
+        specialVarItemId = 0x0203855EL,
+        itemUseType = 0x02038561L,
+        itemUseCb = 0x03004AE4L,
+        itemUseCbTmhm = 0x0806F070L,
+        showPartyMenuForItemUse = 0x0808B020L,
+        partyMenu = 0,
+        partyMenuSlotOff = 0,
+        initPartyMenu = 0x0808AF80L,
+        mainCallback2 = 0x03001774L,
+        setMainCallback2 = 0x080003CCL,
+        returnToField = 0x080545E8L,
+        cleanupOverworld = 0,
+        fadeScreen = 0x0807D644L,
+        lockControls = 0x08065534L,
+        unlockControls = 0x08065540L,
+        bagReturn = 0x080A5B40L,
+        overworld = 0x080543A8L,
+        codeCrcs = listOf(0xD38FC57EL, 0x2A0A6EBDL, 0x9F85C0F2L, 0x37AB1053L, 0x88079914L, 0xF9959006L, 0xA003C21AL, 0x9807B468L),
     )
 }

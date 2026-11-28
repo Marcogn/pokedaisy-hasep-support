@@ -86,7 +86,7 @@ interface QuickActions {
     fun run(action: QuickAction)
 
     /** FLY to [mapsec], one of [targets]' destinations. */
-    fun flyTo(mapsec: Int, targets: FlyTargets)
+    fun flyTo(mapsec: Int, targets: FlyTargets) {}
 
     /** Uses one [itemId] of the bag's REPEL kinds ([REPEL_KINDS]). */
     fun repel(itemId: Int) {}
@@ -116,6 +116,9 @@ interface QuickActions {
  * activity while it's open ([key], [aim], [trigger]), withheld from the game like the companion window's.
  */
 class QuickMenuState {
+    /** Async destinations belong to one visit, never a later reopening or return from a list. */
+    var visit = 0L
+        private set
     var open by mutableStateOf(false)
         private set
 
@@ -133,6 +136,12 @@ class QuickMenuState {
 
     /** Where the ring put each tile, as a turn from the top clockwise (0..1), for [aim]; set as it lays out. */
     internal var ringTurns: FloatArray = FloatArray(0)
+
+    /** The tiles' size as last measured (px, zero before): whether the [ring] has room on this screen ([ringFits]). */
+    internal var tileSize by mutableStateOf(androidx.compose.ui.unit.IntSize.Zero)
+
+    /** The screen has room for the [ring] as last laid out (else the grid stands in, GitHub #1225): the stick aims only then. */
+    internal var ringRoom = true
 
     /** The highlighted tile, in [items]. */
     var index by mutableIntStateOf(0)
@@ -152,13 +161,13 @@ class QuickMenuState {
         private set
 
     /** The tiles shown (set as it draws), so the D-pad knows how many there are. */
-    internal var items: List<QuickAction> = emptyList()
+    var items: List<QuickAction> = emptyList()
 
     /** Why each tile is dimmed now (null = ready), as it draws. */
-    internal var blocked: (QuickAction) -> String? = { null }
+    var blocked: (QuickAction) -> String? = { null }
 
     /** REPEL's kinds in the bag, weakest first, as it draws. */
-    internal var repelKinds: List<Int> = emptyList()
+    var repelKinds: List<Int> = emptyList()
 
     /** FLY's destination ids in its list's order. */
     internal var flyIds: List<Int> = emptyList()
@@ -188,6 +197,7 @@ class QuickMenuState {
     fun trigger(pressed: Boolean) {
         if (!pressed) return
         if (open) close() else {
+            visit++
             open = true
             gone = false
             fly = null
@@ -198,6 +208,7 @@ class QuickMenuState {
 
     fun close(instant: Boolean = false) {
         val was = open
+        visit++
         if (instant && was) gone = true
         open = false
         fly = null
@@ -208,6 +219,7 @@ class QuickMenuState {
 
     /** From a list back to the tiles. */
     fun back() {
+        visit++
         fly = null
         repels = null
         confirm = null
@@ -244,7 +256,7 @@ class QuickMenuState {
      * that way, the first one at the top and on round clockwise. True = taken (a ring with tiles, no list up).
      */
     fun aim(x: Float, y: Float): Boolean {
-        if (!open || !ring || listing || items.isEmpty()) return false
+        if (!open || !ring || !ringRoom || listing || items.isEmpty()) return false
         if (sqrt(x * x + y * y) < AIM_DEAD) return true
         val n = items.size
         val turn = (atan2(x, -y) / (2 * PI)).toFloat().let { if (it < 0) it + 1 else it }
@@ -371,7 +383,7 @@ fun quickBlocked(action: QuickAction, s: SnapshotView, repelSteps: Int = 0, dark
 }
 
 /** Why FLASH didn't start, in the companion's words (the HUD's notice). */
-internal fun flashMessage(r: com.pokedaisy.app.companion.data.FlashResult): String = when (r) {
+fun flashMessage(r: com.pokedaisy.app.companion.data.FlashResult): String = when (r) {
     com.pokedaisy.app.companion.data.FlashResult.NOT_NOW -> tr("Not now: close the game's menus and battles first.")
     com.pokedaisy.app.companion.data.FlashResult.IN_BATTLE -> tr("You can't do that during a battle.")
     com.pokedaisy.app.companion.data.FlashResult.NO_BADGE -> tr("FLASH needs a new BADGE first.")
@@ -435,7 +447,15 @@ fun QuickMenu(state: QuickMenuState, snapshot: SnapshotView, actions: QuickActio
             val current = items.getOrNull(state.index)
             val why = current?.let { quickBlocked(it, snapshot, repelSteps, dark, flying) }
             val hint = current?.let { why ?: quickHint(it, actions) }
-            val ring = state.ring
+            // RING where it has room: on a small screen (a phone's short side, a split screen) its tiles would run into
+            // each other, so the grid stands in (GitHub #1225).
+            val room = state.tileSize.let { t ->
+                t == androidx.compose.ui.unit.IntSize.Zero || with(LocalDensity.current) {
+                    ringFits(items.size, t.width.toFloat(), t.height.toFloat(), (u * RING_GAP).toPx(), (maxWidth * RING_ROOM).toPx(), (maxHeight * RING_ROOM).toPx())
+                }
+            }
+            state.ringRoom = room
+            val ring = state.ring && room
             val tile: @Composable (Int) -> Unit = { i ->
                 // UniformTiles' slots can recompose with the count they were last measured with while this lambda
                 // already sees the new, shorter list (an action no longer offered): skip the index that's gone.
@@ -455,14 +475,14 @@ fun QuickMenu(state: QuickMenuState, snapshot: SnapshotView, actions: QuickActio
                         repels != null -> RepelKinds(state, repels, snapshot, m)
                         items.isEmpty() -> GbaText(tr("Nothing to show: pick actions in SETTINGS > QUICK MENU"), ink.text, ink.shadow, m, maxLines = 2)
                         else -> {
-                            TileGrid(items.size, gap = u * 5, tile)
+                            TileGrid(state, items.size, gap = u * 5, tile)
                             if (hint != null) GbaText(hint, ink.text, ink.shadow, rememberGbaTextMetrics(0.75f), maxLines = 2)
                         }
                     }
                 }
             } else {
                 // The highlighted one's name (and why it's dimmed) in the middle, like a game's weapon wheel.
-                TileRing(state, items.size, gap = u * 10, maxW = maxWidth * 0.96f, maxH = maxHeight * 0.96f, { fan }, tile) {
+                TileRing(state, items.size, gap = u * RING_GAP, maxW = maxWidth * RING_ROOM, maxH = maxHeight * RING_ROOM, { fan }, tile) {
                     // With names on the tiles, the middle only says why the highlighted one is dimmed (or WILD's state).
                     val name = if (state.labels) null else quickLabel(current ?: QuickAction.PC, actions)
                     val note = why ?: if (current == QuickAction.WILD || current == QuickAction.TURBO) quickHint(current, actions) else null
@@ -493,6 +513,8 @@ private fun UniformTiles(
     size: (w: Int, h: Int, c: Constraints) -> Pair<Int, Int>,
     /** How wide [extra] may be, given the tile size. */
     extraWidth: (w: Int, h: Int) -> Int = { _, _ -> Constraints.Infinity },
+    /** Told the tiles' size each time they're measured. */
+    onTileSize: (w: Int, h: Int) -> Unit = { _, _ -> },
 ) {
     SubcomposeLayout(modifier) { c ->
         val loose = Constraints()
@@ -500,6 +522,7 @@ private fun UniformTiles(
         val w = probe.maxOfOrNull { it.width } ?: 0
         val h = probe.maxOfOrNull { it.height } ?: 0
         val tiles = subcompose("tiles") { for (i in 0 until n) tile(i) }.map { it.measure(Constraints.fixed(w, h)) }
+        onTileSize(w, h)
         val (lw, lh) = size(w, h, c)
         val more = subcompose("extra", extra).map { it.measure(Constraints(maxWidth = minOf(lw, extraWidth(w, h)).coerceAtLeast(0), maxHeight = lh)) }
         layout(lw, lh) { place(tiles, w, h, more) }
@@ -508,11 +531,11 @@ private fun UniformTiles(
 
 /** GRID: as many tiles a row as the width takes, the rows evened out (9 = 5 + 4, not 8 + 1) and each centred. */
 @Composable
-private fun TileGrid(n: Int, gap: Dp, tile: @Composable (Int) -> Unit) {
+private fun TileGrid(state: QuickMenuState, n: Int, gap: Dp, tile: @Composable (Int) -> Unit) {
     val g = with(LocalDensity.current) { gap.roundToPx() }
     var cols = 1
     UniformTiles(
-        n, Modifier, tile,
+        n, Modifier, tile, onTileSize = { w, h -> state.tileSize = androidx.compose.ui.unit.IntSize(w, h) },
         size = { w, h, c ->
             val fit = ((c.maxWidth + g) / (w + g)).coerceIn(1, n.coerceAtLeast(1))
             val rows = ceil(n / fit.toFloat()).toInt().coerceAtLeast(1)
@@ -541,7 +564,7 @@ private fun TileRing(state: QuickMenuState, n: Int, gap: Dp, maxW: Dp, maxH: Dp,
     val (gapPx, limW, limH) = with(density) { Triple(gap.toPx(), maxW.toPx(), maxH.toPx()) }
     var places = RingPlaces(0f, 0f, FloatArray(0), FloatArray(0))
     UniformTiles(
-        n, Modifier, tile, extra = center,
+        n, Modifier, tile, extra = center, onTileSize = { w, h -> state.tileSize = androidx.compose.ui.unit.IntSize(w, h) },
         size = { w, h, _ ->
             places = ringPlaces(n, w.toFloat(), h.toFloat(), gapPx, limW, limH)
             state.ringTurns = places.turns
@@ -567,6 +590,23 @@ private fun TileRing(state: QuickMenuState, n: Int, gap: Dp, maxW: Dp, maxH: Dp,
     )
 }
 
+/** The ring's gap between tiles (GBA pixels) and how much of the screen it may take. */
+private const val RING_GAP = 10
+private const val RING_ROOM = 0.96f
+
+/**
+ * The ring of [n] tiles of [w] x [h] ([ringPlaces] with [gap]) fits [limW] x [limH] with every two tiles at least half a
+ * [gap] apart. On a small screen the oval's sides run into each other - not only neighbours: its two halves cross.
+ */
+fun ringFits(n: Int, w: Float, h: Float, gap: Float, limW: Float, limH: Float): Boolean {
+    if (n < 2) return true
+    val r = ringPlaces(n, w, h, gap, limW, limH)
+    if (2 * r.rx + w > limW + .5f || 2 * r.ry + h > limH + .5f) return false
+    for (i in 0 until n) for (j in i + 1 until n)
+        if (maxOf(abs(r.x[j] - r.x[i]) - w, abs(r.y[j] - r.y[i]) - h) < gap / 2 - .01f) return false
+    return true
+}
+
 /** How long the ring takes to open and to close, how small a tile starts, and how much of that time one tile's trip takes. */
 private const val RING_OPEN_MS = 300
 private const val RING_CLOSE_MS = 220
@@ -578,7 +618,7 @@ private const val TILE_TRIP = 0.4f
  * leaves a little after the one before it and slows as it arrives, so closing, the same run backwards, takes the last one in
  * first.
  */
-internal fun tileOut(open: Float, i: Int, n: Int): Float {
+fun tileOut(open: Float, i: Int, n: Int): Float {
     val start = if (n > 1) i * (1f - TILE_TRIP) / (n - 1) else 0f
     val t = ((open - start) / TILE_TRIP).coerceIn(0f, 1f)
     return 1f - (1f - t) * (1f - t) * (1f - t)
@@ -646,6 +686,11 @@ internal fun ringPlaces(n: Int, w: Float, h: Float, gap: Float, limW: Float, lim
         // Too tall: as tall as the screen allows, the oval as wide as it then needs.
         ry = ((limH - h) / 2).coerceAtLeast(h)
         rx = minOf(ry * bisect(1f, 8f) { overrun(ry * it, ry, g) }, ((limW - w) / 2).coerceAtLeast(ry))
+    }
+    // Both screen limits can clamp the oval before the original gap fits. Refit that gap too;
+    // otherwise an odd count walks past the bottom and its mirrored last pair overlaps.
+    if (overrun(rx, ry, g) && !overrun(rx, ry, 0f)) {
+        g = (bisect(0f, g) { !overrun(rx, ry, it) } - .01f).coerceAtLeast(0f)
     }
     val t = walk(rx, ry, g)
     // The right half as walked (a clamped oval squeezed to end at the bottom), then the left as its mirror.
@@ -805,7 +850,7 @@ private fun QuickIcon(action: QuickAction, s: SnapshotView, actions: QuickAction
         QuickAction.HEAL -> PixelArt(HEAL_ICON, HEAL_COLORS, Modifier.size(size * 0.8f))
         QuickAction.FLY -> {
             val flyer = s.party.firstOrNull { !it.isEgg && it.moves.any { mv -> mv.id == FLY_MOVE } } ?: s.party.firstOrNull()
-            SpeciesIcon(flyer?.iconAsset, size * 1.2f)
+            MonIcon(flyer, size * 1.2f)
         }
         // The wings: up (TAKE OFF) or down (LAND).
         QuickAction.FLIGHT -> PixelArt(if (actions.flying()) LAND_ICON else TAKE_OFF_ICON, WING_COLORS, Modifier.size(size * 0.8f))
@@ -831,6 +876,7 @@ private fun QuickIcon(action: QuickAction, s: SnapshotView, actions: QuickAction
 fun quickMenuRows(
     shown: Set<QuickAction>, binding: String, style: QuickMenuStyle, labels: Boolean,
     setShown: (Set<QuickAction>) -> Unit, setStyle: (QuickMenuStyle) -> Unit, setLabels: (Boolean) -> Unit, onHotkey: () -> Unit,
+    available: Set<QuickAction> = QuickAction.entries.toSet(),
 ): List<SettingRow> {
     fun onOff(b: Boolean) = if (b) tk("ON") else tk("OFF")
     return listOf(
@@ -841,7 +887,7 @@ fun quickMenuRows(
         },
         SettingRow(tk("LABELS"), onOff(labels), subtitle = "Each action's name under its icon") { setLabels(!labels) },
         groupTitle(tk("SHOW")),
-    ) + QuickAction.entries.map { a ->
+    ) + QuickAction.entries.filter { it in available }.map { a ->
         val badge = when (a) {
             QuickAction.FLASH -> NewFeatures.badge(NewFeatures.QUICK_FLASH)
             QuickAction.FLIGHT -> NewFeatures.badge(NewFeatures.FREE_FLIGHT)
@@ -885,7 +931,7 @@ fun quickMenuBadge(): String? = NewFeatures.badge(NewFeatures.QUICK_MENU) ?: New
     ?: NewFeatures.badge(NewFeatures.FREE_FLIGHT) ?: NewFeatures.badge(NewFeatures.QUICK_TOUCH) ?: NewFeatures.badge(NewFeatures.QUICK_TURBO)
 
 /** MOVE_FLASH (the quick menu's FLASH tile, the party check). */
-internal const val FLASH_MOVE = 148
+const val FLASH_MOVE = 148
 
 /** FLASH: a burst of light, K outline, Y its glow, W the white middle. */
 /** HEAL: a heart in the POKéMON CENTER's pink, a highlight on its left lobe. */
@@ -1028,7 +1074,10 @@ private val FF_ICON = listOf(
 // ---- HEAL's healed animation ----------------------------------------------------------------------
 
 /** The party as it was before HEAL ran ([before], eggs left out), shown healing by [HealedAnimation]; [id] tells two heals apart. */
-class HealShow(val before: List<MonView>, val id: Long = System.nanoTime())
+class HealShow(val before: List<MonView>, val id: Long = nextHealId++)
+
+/** Each HEAL's own id (the UI thread's): a second heal while one plays starts its own animation. */
+private var nextHealId = 0L
 
 /**
  * HEAL done, over the game (the HUD's view): a window in the middle with the party's icons, each one's HP bar filling to

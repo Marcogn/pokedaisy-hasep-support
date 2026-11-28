@@ -5,3 +5,7 @@ dist/
 *-debug.log
 # docs/manual's screenshots and art, copied in by scripts/sync-docs.mjs before dev / build
 public/docs/
+# Release files: copied in for a release and uploaded to R2 (scripts/release-files.mjs), never committed
+release-files/
+# The r2.dev / Firebase fallback's copy of the release files (functions/downloads.js FALLBACK), until 2026-11-28; never committed
+public/downloads/

@@ -135,10 +135,23 @@ static void test_handheld_navigation(void) {
     assert(pd_ui_settings_control(&ui, 1, false));
     assert(ui.settingsNavId == HIT_SETTING + SETTING_HUD);
     assert(pd_ui_settings_control(&ui, 20, false));
-    assert(ui.settingsNavId == HIT_SETTING + SETTING_TAB_BAR && ui.settingsScroll > 0);
+    // The last row: LANGUAGE, under the game's own rows; TAB BAR above it.
+    assert(ui.settingsNavId == HIT_SETTING + SETTING_LANGUAGE && ui.settingsScroll > 0);
+    pd_ui_draw(&ui, &canvas, &game, &snap, &host);
+    assert(has(&ui, ui.settingsNavId));
+    assert(pd_ui_settings_control(&ui, -1, false));
+    assert(ui.settingsNavId == HIT_SETTING + SETTING_TAB_BAR);
     pd_ui_draw(&ui, &canvas, &game, &snap, &host);
     assert(has(&ui, ui.settingsNavId));
     assert(pd_ui_settings_control(&ui, 0, true) && ui.overlay == PD_OVERLAY_TAB_BAR);
+    // TAB BAR offers only the tabs this game has (GitHub #1346): no card, DEX or achievements in a game without them.
+    {
+        enum pd_tab tabs[UI_BAR_CHOICES];
+        const int n = ui_configurable_tabs(&ui, tabs);
+        assert(n > 0 && n == pd_ui_tab_menu_count(&ui));
+        for (int i = 0; i < n; i++)
+            assert(tabs[i] != PD_TAB_CARD && tabs[i] != PD_TAB_DEX && tabs[i] != PD_TAB_ACHIEVEMENTS && tabs[i] != PD_TAB_NUZLOCKE);
+    }
     assert(pd_ui_back(&ui));
     assert(pd_ui_settings_control(&ui, -20, false) && ui.settingsScroll == 0);
 
