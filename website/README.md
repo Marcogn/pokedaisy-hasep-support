@@ -72,7 +72,11 @@ for, or a game the two tables don't share (Emerald Kaizo is in the doc but not R
 Firebase Hosting, project `pokedaisy` → https://pokedaisy.com (`firebase.json`, `.firebaserc`).
 `.github/workflows/website.yml` deploys the live site only when an app version is released: publishing a
 GitHub release (not a pre-release) builds and deploys `website/` as it is at that release's tag, so the game
-table and ROM check always match the APK people can download. Pushes to `main` only test and build. Pull
+table and ROM check always match the APK people can download. Publishing a pre-release (a beta or rc) deploys
+the newest release's tag again: the build reads that beta's `compat.json` and `docs/ROM_FEATURES.md` from GitHub
+(`src/lib/betaRelease.js`) and lists what it supports on top, tagged BETA, in the games table, the builds list and
+the ROM check, each with a window on how to get the beta (`BetaModal.astro`). Once the release is out there's no
+beta, and those games are the release's own. Pushes to `main` only test and build. Pull
 requests from this repo get a temporary preview channel, linked in a PR comment. To redeploy or roll back,
 run the workflow by hand (Actions > Website > Run workflow) with a release tag, e.g. `v1.1.4`. It needs
 the repo secret `FIREBASE_SERVICE_ACCOUNT_POKEDAISY`: a service account JSON key with the

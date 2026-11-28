@@ -4,7 +4,7 @@
 the ROM from its own folder. It uses `pokedaisy_gba_libretro.so` for `.gba` (armGBA, `libretro/armgba/`),
 `pokedaisy_gbc_libretro.so` for `.gb` / `.gbc` (mGBA, `libretro/`), or `pokedaisy_ds_libretro.so` for `.nds`
 (DSperate, `linux/libretro-ds/`), and shows what the core draws. So the companion,
-the HUD, the quick menu (PC, FLY, TAKE OFF, FLASH, REPEL, BIKE, WILD ENCOUNTERS), EXPAND and every companion setting are the cores'
+the HUD, the quick menu (PC, FLY, TAKE OFF, FLASH, REPEL, BIKE, WILD ENCOUNTERS), EXPAND, ZOOM and every companion setting are the cores'
 own, the same as on any other frontend, and a change to them reaches this executable with the next core build.
 
 The host owns what a frontend owns: input, sound, pacing, the battery save and its backups, save states,
@@ -37,10 +37,12 @@ POCKET_CORE_DIR=build/cores linux/build/pokedaisy-linux --data /your/test-direct
 ```
 
 Without a ROM argument, choose a `.gb`, `.gbc`, `.gba` or `.nds` from DATA/roms and the folders `POCKET_ROM_DIRS` names
-(colon-separated; the PortMaster launcher passes the firmware's `gba`, `gb`, `gbc` and `nds` folders where they exist). The host creates DATA/saves and
+(colon-separated; the PortMaster launcher passes the firmware's `gba`, `gb`, `gbc` and `nds` folders where they exist, at the roms root or in its `ROMS` folder as on muOS). The host creates DATA/saves and
 DATA/states. Before a game opens its battery save is backed up into DATA/saves/pokedaisy-backups (a new copy only
 when it changed, the newest 10 kept; with `--save FILE`, DATA/backups); a save that can't be backed up keeps the game
-closed. The save is DATA/saves/COMPLETE-ROM-FILENAME.sav, the raw battery save, read into the core when the game
+closed. The save is DATA/saves/COMPLETE-ROM-FILENAME.sav, or, when there is none, a save named after the ROM
+without its extension, the way other emulators make them (`pokeblack2.nds` reads `pokeblack2.sav`), the raw battery
+save, read into the core when the game
 opens and written back (to a temporary file, then renamed) within two seconds of the game changing it and on quit.
 States are DATA/states/ROM.ss on the GB/GBC and DS cores and ROM.armgba.ss on the armGBA core: the two can't read each
 other's. The companion's settings are the core's, in DATA/saves/pokedaisy/settings.ini (an older DATA/settings.ini is
@@ -50,7 +52,8 @@ copied there once). The host's own are DATA/host.ini.
 
 Keyboard: arrows, Z=A, X=B, Enter=Start, Backspace=Select, Q/E=L/R, 1/2=L2/R2, Tab=X, F=Y, Space=fast-forward
 (held), R=rewind (held), F2=save state, F4=load state, Escape=the host menu. The core's own controls work as on any
-frontend: X opens the companion, Y the quick menu (each can be rebound in the companion's SETTINGS).
+frontend: X opens the companion, L3 the quick menu (each can be rebound in the companion's SETTINGS; on a keyboard,
+F, the Y key, still opens the quick menu).
 
 START+SELECT (or the controller's Guide / Menu button, or Escape) opens the host menu over the game: RESUME, SAVE
 STATE, LOAD STATE, HOTKEYS, REWIND (keeps the last ~20 s while on, in a 32 MB budget: `POCKET_REWIND_MB`), FF SPEED
@@ -73,8 +76,10 @@ mapping. It is otherwise ignored unless you explicitly set `POCKET_RAW_TRIMUI=1`
 layout.
 
 `POCKET_FULLSCREEN=1` uses SDL's current display mode. The host tells the core the screen's size (its
-`pokedaisy_panel` option), so the core picks its canvas for that screen (EXPAND at the game's whole scale, the
-companion at the largest whole scale keeping 320x240), and the host shows the frame at the largest whole scale that
+`pokedaisy_panel` option), so the core picks its canvas for that screen (EXPAND at the game's whole scale, each ZOOM
+step one whole scale further out, the
+companion at the largest whole scale keeping 320x240: 320x240 on 640x480, 426x240 on 1280x720, 341x256 on 1024x768,
+480x270 on 1920x1080, the DS core's companion too), and the host shows the frame at the largest whole scale that
 fits, centred. `POCKET_WINDOW=WxH` opens the window at a device's panel size instead (1280x800, 1280x720, 640x480,
 720x720 ...), to try a layout on a desktop. The screen paces the game when it runs at 58-62 Hz and presents wait for
 it, else a timer does; the sound is resampled a little faster or slower to keep up. Audio-device failure is logged
@@ -92,6 +97,10 @@ exit hotkey) beside a `pokedaisy/` folder with the binary, the cores (`--core`),
 uses the firmware's own SDL2. CTest's `portmaster-launcher` runs the launcher
 against a stand-in PortMaster (native builds). The package has been played from the Ports menu of a ROCKNIX
 handheld (GKD 350H): the firmware's ROM folders in the game list, the host menu on MENU, A/B BUTTONS.
+The package carries the port's art for the firmware's game list (`cover.png`, `screenshot.png`, `marquee.png`, PortMaster's
+`gameinfo.xml` and `port.json`): PokeDaisy's own flower, page and font, never a game's art. `linux/portmaster/make_art.py`
+draws the cover and marquee; the screenshot is the game list (the library) over made-up games with no covers, taken
+headless with `POCKET_WINDOW=640x480` and `--shot` (no real game's name or art).
 
 ## TrimUI cross-build and launcher
 
@@ -147,13 +156,13 @@ are in NOTICE and the packaged licenses (mGBA, and armGBA and zlib for the GBA c
 ## Nintendo DS
 
 The bundled DS core starts in its One Screen layout. L2 opens the Companion and R2 switches screens by default.
-Hold L2 to open Quick Menu. With SELECT as the host modifier, SELECT + Y toggles stylus mode and SELECT + D-pad/A
+L3 opens Quick Menu (holding L2 still does). With SELECT as the host modifier, SELECT + Y toggles stylus mode and SELECT + D-pad/A
 moves or taps the stylus. DS host actions can be rebound separately in HOTKEYS (SELECT + R2 / L2 by default; with
 the modifier off they move to R3 / L3, since bare R2 / L2 belong to the core). Companion Settings → HUD opens the shared HUD
 page (on or off, LOOK, SIZE and each part), as on the GB and GBA cores. MINIMAL HUD hides the party cards.
 
-To bring over an existing DS battery save, copy its raw save data to `DATA/saves/<game>.nds.sav` (including the
-ROM extension in the name), or pass its path with `--save`.
+To bring over an existing DS battery save, copy its raw save data to `DATA/saves/<game>.nds.sav`, or to
+`DATA/saves/<game>.sav` (a save named without the ROM extension is found too), or pass its path with `--save`.
 
 The older opt-in DSperate experiment is still available with `-DPOCKET_DSPERATE=ON`. See
 [dsperate/README.md](dsperate/README.md) for that backend's build and save paths.

@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='pd-linux-package-') as d:
         assert name+'/pokedaisy_gba_libretro.so' in names and name+'/licenses/armGBA-MPL-2.0.txt' in names
         assert b'armGBA: ' in z.read(name+'/SOURCE.txt')
         assert z.getinfo(name+'/launch.sh').external_attr>>16 & 0o111
-        assert z.read(name+'/SOURCE.txt').startswith(b'Source: https://github.com/lidor30/pokedaisy')
+        assert z.read(name+'/SOURCE.txt').startswith(b'Source: https://pokedaisy.com')
         assert not any(n.lower().endswith(('.gb','.gbc','.gba','.sav','.ss','.srm','.bin')) for n in names)
     before=archive.read_bytes()
     result=subprocess.run([sys.executable,str(script),*options,str(binary),d],capture_output=True,text=True)
@@ -42,8 +42,15 @@ with tempfile.TemporaryDirectory(prefix='pd-linux-package-') as d:
     result=subprocess.run([sys.executable,str(script),'--portmaster',*options,str(binary),d],capture_output=True,text=True)
     assert result.returncode==0,result.stderr
     with zipfile.ZipFile(Path(d)/(pm+'.zip')) as z:
-        names=z.namelist();assert len(names)==10+extra,names
+        names=z.namelist();assert len(names)==15+extra,names
         assert z.getinfo(pm+'/PokeDaisy.sh').external_attr>>16 & 0o111
+        # The firmware's game list art and PortMaster's entries for it.
+        for art in ('cover.png','screenshot.png','marquee.png'):
+            assert z.read(pm+'/pokedaisy/'+art)[:4]==b'\x89PNG',art
+        info=z.read(pm+'/pokedaisy/gameinfo.xml').decode()
+        assert '<path>./PokeDaisy.sh</path>' in info and './pokedaisy/cover.png' in info,info
+        import json
+        assert json.loads(z.read(pm+'/pokedaisy/port.json'))['items']==['PokeDaisy.sh','pokedaisy/']
         assert z.read(pm+'/pokedaisy/pokedaisy-linux')==binary.read_bytes()
         assert pm+'/pokedaisy/pokedaisy_gbc_libretro.so' in names
         assert z.getinfo(pm+'/pokedaisy/pokedaisy-linux').external_attr>>16 & 0o111

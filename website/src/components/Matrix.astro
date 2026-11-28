@@ -1,12 +1,18 @@
 ---
 // Every supported game and what the companion does in it: README.md's "Supported games" table,
-// exported into compat.json by SiteDataExportTest.
+// exported into compat.json by SiteDataExportTest, plus the rows only the newest beta has (beta.js), tagged BETA:
+// the tag and the details window open the beta's window (BetaModal.astro).
 import Pixel from './Pixel.astro';
-import data from '../data/compat.json';
+import BetaTag from './BetaTag.astro';
+import release from '../data/compat.json';
+import { getBeta } from '../lib/betaRelease.js';
+import { withBeta } from '../lib/beta.js';
 import { trFor, msg } from '../i18n/index.js';
 import { FEATURE_GROUPS, FEATURE_COLUMNS, loadRomFeatures, rowsFor, shortVersion } from '../lib/romFeatures.js';
 
 const tr = trFor(Astro.url);
+const beta = await getBeta();
+const data = withBeta(release, beta?.add);
 
 const ICONS: Record<string, string> = { Party: 'orb', Bag: 'bag', Battle: 'battle', Map: 'map', Dex: 'dex', Guide: 'guide' };
 const LABELS: Record<string, string> = { Party: tr('PARTY'), Bag: tr('BAG'), Battle: tr('BATTLE'), Map: tr('MAP'), Dex: tr('DEX'), Guide: tr('GUIDE') };
@@ -15,11 +21,12 @@ const RETAIL = ['FireRed', 'LeafGreen', 'Emerald', 'Ruby', 'Sapphire'];
 const kind = (game: string) =>
   /\((GB|GBC)\)/.test(game) ? 'gb' : /\(DS\)/.test(game) ? 'ds' : RETAIL.includes(game) ? 'retail' : 'hack';
 // Game Boy first, then README's order.
-const rows = data.matrix.rows.map((r) => ({ ...r, kind: kind(r.game), name: r.game.replace(/ \((GB|GBC|DS)\)$/, '') }))
+const rows = data.matrix.rows.map((r: any) => ({ ...r, kind: kind(r.game), name: r.game.replace(/ \((GB|GBC|DS)\)$/, '') }))
   .sort((a, b) => Number(b.kind === 'gb') - Number(a.kind === 'gb'));
-const counts = { all: rows.length, retail: 0, hack: 0, gb: 0, ds: 0 } as Record<string, number>;
-rows.forEach((r) => counts[r.kind]++);
-const filters = [['all', msg('ALL')], ['retail', msg('ORIGINALS')], ['hack', msg('ROM HACKS')], ['gb', msg('GAME BOY')], ['ds', 'DS']];
+const counts = { all: rows.length, retail: 0, hack: 0, gb: 0, ds: 0, beta: 0 } as Record<string, number>;
+rows.forEach((r) => { counts[r.kind]++; if (r.beta) counts.beta++; });
+const filters = [['all', msg('ALL')], ['retail', msg('ORIGINALS')], ['hack', msg('ROM HACKS')], ['gb', msg('GAME BOY')], ['ds', 'DS'],
+  ...(counts.beta ? [['beta', 'BETA']] : [])];
 const KIND_LABEL: Record<string, string> = { retail: tr('ORIGINAL'), hack: tr('ROM HACK'), gb: tr('GAME BOY'), ds: 'NINTENDO DS' };
 const STATE: Record<string, string> = { yes: tr('works'), part: tr('partly'), no: tr('not yet') };
 
@@ -33,8 +40,11 @@ const details = Object.fromEntries([...new Set(rows.map((r) => r.game))].map((ga
   return [game, {
     name: own[0].name,
     kind: own[0].kind,
+    beta: own.find((r) => r.beta)?.beta,
     tabs: own.map((r) => [shortVersion(r.version), r.cells.map((c: string) => LETTER[c]).join('')]),
-    feats: rowsFor(features, game).map((f) => [shortVersion(f.version), FEATURE_COLUMNS.map((c) => LETTER[f.cells[c]]).join('')]),
+    // A game only the beta reads has its rows in the beta's ROM_FEATURES.md.
+    feats: rowsFor(own.every((r) => r.beta) && beta?.features ? beta.features : features, game)
+      .map((f) => [shortVersion(f.version), FEATURE_COLUMNS.map((c) => LETTER[f.cells[c]]).join('')]),
   }];
 }));
 const sheetText = {
@@ -43,6 +53,8 @@ const sheetText = {
   kinds: KIND_LABEL,
   states: { y: tr('works'), p: tr('partly'), n: tr('not yet'), a: tr('n/a') },
   tabsTitle: tr('COMPANION TABS'),
+  beta: tr('Only in the beta, {version}, so far.'),
+  getBeta: tr('HOW TO GET IT'),
 };
 ---
 <div class="matrix">
@@ -72,10 +84,10 @@ const sheetText = {
       ))}
     </div>
     {rows.map((r, i) => (
-      <div class="tr row" data-kind={r.kind} data-game={r.game} data-q={`${r.name} ${r.version} ${KIND_LABEL[r.kind]}`} style={`--i:${i}`}>
+      <div class="tr row" data-kind={r.kind} data-beta={r.beta} data-game={r.game} data-q={`${r.name} ${r.version} ${KIND_LABEL[r.kind]}${r.beta ? ' beta' : ''}`} style={`--i:${i}`}>
         <span class="game-col">
           <button type="button" class="g-name" aria-haspopup="dialog">{r.name}<span class="g-more" aria-hidden="true"><Pixel name="cursor" scale={0.667} /></span></button>
-          <span class="g-meta small"><span class:list={['kind', `k-${r.kind}`]}>{KIND_LABEL[r.kind]}</span> {r.version}</span>
+          <span class="g-meta small"><span class:list={['kind', `k-${r.kind}`]}>{KIND_LABEL[r.kind]}</span> {r.version}{r.beta && <BetaTag />}</span>
         </span>
         {r.cells.map((c, j) => (
           <span class="cell" title={`${LABELS[data.matrix.columns[j]]}: ${STATE[c]}`}>
@@ -106,6 +118,7 @@ const sheetText = {
         </div>
         <button type="button" class="btn f-btn h-btnHot small" data-close>{tr('CLOSE')}</button>
       </div>
+      <p class="beta-note small" data-beta-note hidden></p>
       <div class="sheet-body" data-body></div>
       <div class="legend small">
         <span><Pixel name="yes" scale={0.667} /> {tr('WORKS')}</span>
@@ -121,7 +134,12 @@ const sheetText = {
 </div>
 
 <style is:global>
-  .matrix { display: grid; gap: 20px; }
+  .matrix { display: grid; gap: 20px; font-family: var(--font-pixel); }
+  /* A table of labels: the pixel font at its own sizes; the notes under it read in --font-read. */
+  .matrix .small { font-size: var(--t-s); }
+  .matrix .notes { font-family: var(--font-read); font-size: var(--r-s); }
+  .game-sheet { font-family: var(--font-pixel); }
+  .game-sheet .small { font-size: var(--t-s); }
   .filters, .chips { display: flex; flex-wrap: wrap; gap: 12px; }
   .filter { font: inherit; font-size: var(--t-s); cursor: pointer; background: none; color: var(--ink); transition: transform 0.12s steps(2); }
   .filter:hover { transform: translateY(calc(var(--px) * -1)); }
@@ -135,16 +153,16 @@ const sheetText = {
     flex: 1; min-width: 0; font: inherit; font-size: var(--t-s); color: var(--ink); background: none;
     padding: calc(var(--px) * 1) calc(var(--px) * 2) calc(var(--px) * 1) calc(var(--px) * 10); outline: none;
   }
-  .games-search::placeholder { color: #a8a6b6; }
+  .games-search::placeholder { color: var(--muted); }
   .games-search:focus-visible { outline: var(--px) dashed var(--red); outline-offset: var(--px); }
   .games-none { padding: 14px calc(var(--px) * 5); }
   .games-none[hidden] { display: none; }
   .table { filter: var(--hard-shadow); padding: calc(var(--px) * 2) 0; }
   .tr { display: grid; grid-template-columns: minmax(0, 1fr) repeat(6, 76px); align-items: center; padding: 10px calc(var(--px) * 5); }
   .tr.head { border-bottom: var(--px) solid var(--ink); padding-bottom: 12px; }
-  .tr.row + .tr.row { border-top: var(--px) solid #ecebf2; }
+  .tr.row + .tr.row { border-top: var(--px) solid var(--line); }
   .tr.row { transition: background 0.1s steps(1); }
-  .tr.row:hover { background: #fff7d6; }
+  .tr.row:hover { background: var(--hover); }
   .tr.row[hidden] { display: none; }
   .js .tr.row.pop { animation: rowin 0.3s steps(3) both; animation-delay: calc(var(--n, 0) * 25ms); }
   @keyframes rowin { from { opacity: 0; transform: translateX(calc(var(--px) * -6)); } to { opacity: 1; transform: none; } }
@@ -169,9 +187,9 @@ const sheetText = {
   /* The title and CLOSE stay at the top while the tables scroll under them. */
   .sheet-head {
     display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px;
-    position: sticky; top: calc(var(--px) * -7); z-index: 1; background: #fff;
+    position: sticky; top: calc(var(--px) * -7); z-index: 1; background: var(--card);
     margin: calc(var(--px) * -7) calc(var(--px) * -2) 0; padding: calc(var(--px) * 7) calc(var(--px) * 2) 10px;
-    border-bottom: var(--px) solid #ecebf2;
+    border-bottom: var(--px) solid var(--line);
   }
   @media (max-width: 760px) {
     .sheet-head { top: calc(var(--px) * -5); margin-top: calc(var(--px) * -5); padding-top: calc(var(--px) * 5); }
@@ -183,10 +201,10 @@ const sheetText = {
   .feats th, .feats td { padding: 3px 8px; text-align: left; vertical-align: middle; }
   .feats thead th { color: var(--ink-2); font-weight: normal; border-bottom: var(--px) solid var(--ink); }
   .feats thead th.v { text-align: center; font-size: var(--t-xs); min-width: 72px; line-height: 1.2; padding-bottom: 6px; }
-  .feats tbody tr + tr td, .feats tbody tr + tr th { border-top: var(--px) solid #ecebf2; }
+  .feats tbody tr + tr td, .feats tbody tr + tr th { border-top: var(--px) solid var(--line); }
   .feats .group th { color: var(--red); text-shadow: var(--bold); letter-spacing: 0.0625em; padding-top: 10px; border-top: 0 !important; }
   .feats .f-name { text-shadow: var(--bold); letter-spacing: 0.0625em; }
-  .feats .f-what { display: block; color: var(--muted); font-size: var(--t-xs); line-height: 1.2; max-width: 46ch; }
+  .feats .f-what { display: block; color: var(--muted); font-family: var(--font-read); font-size: var(--r-xs); line-height: 1.35; max-width: 46ch; }
   .feats td.c { text-align: center; }
   .feats td.c .pixel { vertical-align: middle; }
   .na { color: var(--muted); font-size: var(--t-xs); }
@@ -195,9 +213,11 @@ const sheetText = {
     .sheet { padding: calc(var(--px) * 5); max-height: 92vh; }
     .feats thead th.v { min-width: 64px; }
     /* Names keep their width and stay put while the versions scroll sideways under them. */
-    .feats th[scope='row'], .feats th[scope='rowgroup'] { min-width: 56vw; position: sticky; left: 0; z-index: 0; background: #fff; }
+    .feats th[scope='row'], .feats th[scope='rowgroup'] { min-width: 56vw; position: sticky; left: 0; z-index: 0; background: var(--card); }
   }
   .g-meta { color: var(--muted); }
+  .beta-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; font-family: var(--font-read); font-size: var(--r-s); }
+  .beta-note .chip { font-family: var(--font-pixel); font-size: var(--t-xs); }
   .kind { color: var(--ink); margin-right: 6px; }
   .k-retail { color: var(--blue); }
   .k-hack { color: var(--red); }
@@ -214,7 +234,7 @@ const sheetText = {
 
 <script>
   // The details window: built from the data the page carries (data-games, data-t), in the page's language.
-  type Game = { name: string; kind: string; tabs: [string, string][]; feats: [string, string][] };
+  type Game = { name: string; kind: string; beta?: string; tabs: [string, string][]; feats: [string, string][] };
   for (const sheet of document.querySelectorAll<HTMLDialogElement>('[data-sheet]')) {
     const t = JSON.parse(sheet.dataset.t!);
     const games: Record<string, Game> = JSON.parse(sheet.dataset.games!);
@@ -280,6 +300,15 @@ const sheetText = {
       sheet.querySelector('[data-name]')!.textContent = g.name;
       sheet.querySelector('[data-meta]')!.replaceChildren(
         el('span', `kind k-${g.kind}`, t.kinds[g.kind]), document.createTextNode(' ' + g.tabs.map((x) => x[0]).join(' · ')));
+      // A game only the beta reads: say so, with the way to get it.
+      const note = sheet.querySelector<HTMLElement>('[data-beta-note]')!;
+      note.hidden = !g.beta;
+      if (g.beta) {
+        const how = el('button', 'btn f-btn h-btnHot small', t.getBeta);
+        how.setAttribute('type', 'button');
+        how.setAttribute('data-beta-open', '');
+        note.replaceChildren(el('span', 'chip f-pillYellow', 'BETA'), el('span', '', t.beta.replace('{version}', g.beta)), how);
+      }
       const tabRows: [string, string | null, string][] = t.tabs.map((label: string, i: number) => [label, null, g.tabs.map((x) => x[1][i]).join('')]);
       let at = 0;
       const featSections = t.groups.map(([title, list]: [string, [string, string][]]) =>
@@ -295,6 +324,8 @@ const sheetText = {
 
     const matrix = sheet.closest('.matrix')!;
     matrix.addEventListener('click', (e) => {
+      // The BETA tag opens the beta's window instead (BetaModal.astro).
+      if ((e.target as HTMLElement).closest('[data-beta-open]')) return;
       const row = (e.target as HTMLElement).closest<HTMLElement>('.tr.row');
       if (row) open(row.dataset.game!);
     });
@@ -320,7 +351,7 @@ const sheetText = {
       const whole = squash(search.value);
       let n = 0;
       for (const r of rows) {
-        const show = (kind === 'all' || r.dataset.kind === kind)
+        const show = (kind === 'all' || r.dataset.kind === kind || (kind === 'beta' && r.dataset.beta))
           && (words.every((w) => r.dataset.q!.includes(w)) || (whole !== '' && r.dataset.qs!.includes(whole)));
         r.hidden = !show;
         r.classList.remove('pop');

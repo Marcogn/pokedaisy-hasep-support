@@ -248,10 +248,10 @@ object PixelIcons {
 
     /** [star]'s outline alone: not a favorite (yet) - the Library's FAVORITE menu entry. */
     val starOutline: List<String> = star.mapIndexed { y, row ->
-        String(CharArray(row.length) { x ->
+        CharArray(row.length) { x ->
             fun on(xx: Int, yy: Int) = star.getOrNull(yy)?.getOrNull(xx) == '1'
             if (on(x, y) && !(on(x - 1, y) && on(x + 1, y) && on(x, y - 1) && on(x, y + 1))) '1' else '.'
-        })
+        }.concatToString()
     }
 
     /** A Poké Ball, its top filled and its bottom an outline: a bag item the companion can USE / GIVE
@@ -782,13 +782,13 @@ fun ShadowedPixelIcon(
     val w = bitmap.maxOf { it.length } + 1
     fun on(x: Int, y: Int) = bitmap.getOrNull(y)?.getOrNull(x) == '1'
     val shadowed = List(h) { y ->
-        String(CharArray(w) { x ->
+        CharArray(w) { x ->
             when {
                 on(x, y) -> 'F'
                 on(x - 1, y) || on(x, y - 1) || on(x - 1, y - 1) -> 'S'
                 else -> '.'
             }
-        })
+        }.concatToString()
     }
     PixelArt(shadowed, mapOf('F' to color, 'S' to shadow), modifier.size(cell * w, cell * h))
 }
@@ -825,10 +825,10 @@ fun PatreonMark(modifier: Modifier = Modifier) = PixelArt(
     modifier.fillMaxSize(),
 )
 
-/** [PixelIcons.github] in GitHub's near-black, beside the repo link. */
+/** [PixelIcons.daisy] in the value red with a gold heart, beside the website's link. */
 @Composable
-fun GitHubMark(modifier: Modifier = Modifier) =
-    PixelIcon(PixelIcons.github, if (OptionColors.dark) Color(0xFFD8DCE4) else Color(0xFF202020), modifier.fillMaxSize())
+fun SiteDaisy(modifier: Modifier = Modifier) =
+    PixelArt(PixelIcons.daisy, mapOf('P' to OptionColors.value, 'C' to OptionColors.favorite), modifier.fillMaxSize())
 
 /** [PixelIcons.discord] in Discord's blurple, beside its row and link. */
 @Composable

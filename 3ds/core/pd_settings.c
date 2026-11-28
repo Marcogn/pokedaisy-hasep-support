@@ -1,4 +1,5 @@
 #include "pd_settings.h"
+#include "pd_tr.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,7 @@ void pd_settings_defaults(struct pd_settings* s) {
     // SHARP 1.5x everywhere: the Linux / libretro cores and the host tests (the user's call, 2026-11-16) and the 3DS (2026-11-17:
     // EXPAND, its default for 1.6.0, took frames and memory a 3DS in the 80 MB mode doesn't have to spare); EXPAND is in VIEW.
     s->aspect = PD_ASPECT_ORIGINAL;
+    s->zoom = 0;
     s->autoZoom = true;
     s->wildOff = false;
     s->tabBar = PD_TAB_BAR_DEFAULT;
@@ -25,7 +27,7 @@ void pd_settings_defaults(struct pd_settings* s) {
     s->runIndoors = false;
     s->quickGrid = false;
     s->lcdFilter = false;
-    s->quickBtn = PD_BTN_Y;
+    s->quickBtn = PD_BTN_L3; // L3, as the app's QUICK MENU hotkey
     s->companionBtn = PD_BTN_X;
     s->hudBtn = PD_BTN_NONE;
     s->hideHints = false;
@@ -49,6 +51,7 @@ void pd_settings_defaults(struct pd_settings* s) {
     s->theme = 8; // POKéDAISY
     s->libraryGrid = false;
     s->libraryRecent = false;
+    s->language = PD_LANG_AUTO;
 }
 
 const int PD_FF_SPEEDS[PD_FF_CHOICES] = {2, 3, 4, 5, 6, 8, 10, 0};
@@ -69,6 +72,7 @@ static bool int_in(const char* v, int lo, int hi, int* out) {
 
 bool pd_settings_load(struct pd_settings* s, const char* path) {
     pd_settings_defaults(s);
+    bool quickBtnCurrent = false;
     FILE* f = fopen(path, "r");
     if (!f) {
         // A save cut off between its remove and its rename (the 3DS's, pd_settings_save) left the new file as .tmp.
@@ -94,9 +98,16 @@ bool pd_settings_load(struct pd_settings* s, const char* path) {
         else if (!strcmp(key, "ffnormal")) s->ffNormal = atoi(value) != 0;
         else if (!strcmp(key, "cheats")) s->cheats = atoi(value) != 0;
         else if (!strcmp(key, "theme")) int_in(value, 0, 99, &s->theme);
+        else if (!strcmp(key, "lang")) {
+            char code[8];
+            snprintf(code, sizeof code, "%s", value);
+            code[strcspn(code, "\r\n")] = 0;
+            s->language = pd_lang_of_code(code);
+        }
         else if (!strcmp(key, "librarygrid")) s->libraryGrid = atoi(value) != 0;
         else if (!strcmp(key, "libraryrecent")) s->libraryRecent = atoi(value) != 0;
         else if (!strcmp(key, "aspect")) int_in(value, 0, PD_ASPECTS - 1, &s->aspect);
+        else if (!strcmp(key, "zoom")) int_in(value, 0, 7, &s->zoom);
         else if (!strcmp(key, "autozoom")) {
             int on;
             if (int_in(value, 0, 1, &on)) s->autoZoom = on;
@@ -125,8 +136,9 @@ bool pd_settings_load(struct pd_settings* s, const char* path) {
         else if (!strcmp(key, "hudlook")) int_in(value, 0, PD_HUD_LOOKS - 1, &s->hudLook);
         else if (!strcmp(key, "hudsize")) int_in(value, 0, PD_HUD_SIZES - 1, &s->hudSize);
         else if (!strcmp(key, "scaling")) int_in(value, 0, PD_SCALINGS - 1, &s->scaling);
-        else if (!strcmp(key, "quickbtn")) int_in(value, 0, PD_BTN_L2 + 1, &s->quickBtn);
-        else if (!strcmp(key, "companionbtn")) int_in(value, 0, PD_BTN_L2 + 1, &s->companionBtn);
+        else if (!strcmp(key, "quickbtn")) int_in(value, 0, PD_BTN_L3, &s->quickBtn);
+        else if (!strcmp(key, "companionbtn")) int_in(value, 0, PD_BTN_L3, &s->companionBtn);
+        else if (!strcmp(key, "quickbtnrev")) quickBtnCurrent = atoi(value) != 0;
         else if (!strcmp(key, "hudbtn")) int_in(value, 0, PD_BUTTONS - 1, &s->hudBtn);
         else if (!strcmp(key, "speed")) int_in(value, 0, PD_GAME_SPEED_COUNT - 1, &s->gameSpeed);
         else if (!strcmp(key, "volume")) int_in(value, 20, 100, &s->gameVolume);
@@ -148,6 +160,11 @@ bool pd_settings_load(struct pd_settings* s, const char* path) {
             if (b && int_in(value, 0, 1, &on)) *b = on;
         }
     }
+    // The quick menu moved from Y to L3 with the app. A settings file written before the move has no
+    // quickbtnrev: its Y is the old default, so move it. A later Y choice is kept by the marker.
+    if (!quickBtnCurrent && s->quickBtn == PD_BTN_Y) s->quickBtn = PD_BTN_L3;
+    if (s->quickBtn == PD_BTN_NONE) s->quickBtn = PD_BTN_L3; // old files could store the cursor's NONE
+    if (s->companionBtn == PD_BTN_NONE) s->companionBtn = PD_BTN_X;
     // VIEW has no PIXEL 1x or SHARP 1.25x of the game's own picture any more: SHARP 1.5x; EXPAND's PIXEL read as 1.25x.
     if (s->aspect == PD_ASPECT_ORIGINAL && (s->screenMode == PD_SCREEN_PIXEL || s->screenMode == PD_SCREEN_SHARP_125))
         s->screenMode = PD_SCREEN_SHARP;
@@ -163,13 +180,13 @@ bool pd_settings_save(const struct pd_settings* s, const char* path) {
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
     FILE* f = fopen(tmp, "w");
     if (!f) return false;
-    fprintf(f, "screen=%d\nff=%d\nguide=%d\naspect=%d\nautozoom=%d\nwildoff=%d\ntabs=%d\nhud=%d\nhudhide=%d\nquickgrid=%d\nlcd=%d\n",
-            s->screenMode, s->ffSpeed, s->guideNotice, s->aspect, s->autoZoom ? 1 : 0, s->wildOff ? 1 : 0, s->tabBar,
+    fprintf(f, "screen=%d\nff=%d\nguide=%d\naspect=%d\nzoom=%d\nautozoom=%d\nwildoff=%d\ntabs=%d\nhud=%d\nhudhide=%d\nquickgrid=%d\nlcd=%d\n",
+            s->screenMode, s->ffSpeed, s->guideNotice, s->aspect, s->zoom, s->autoZoom ? 1 : 0, s->wildOff ? 1 : 0, s->tabBar,
             s->hud ? 1 : 0, s->hudHidden, s->quickGrid ? 1 : 0, s->lcdFilter ? 1 : 0);
     fprintf(f, "hudlayout=%d\nhudlook=%d\nhudsize=%d\n", s->hudLayout, s->hudLook, s->hudSize);
     fprintf(f, "scaling=%d\nffaudio=%d\nrewind=%d\nrunindoors=%d\n", s->scaling, s->ffAudio ? 1 : 0,
             s->rewind ? 1 : 0, s->runIndoors ? 1 : 0);
-    fprintf(f, "quickbtn=%d\ncompanionbtn=%d\nhudbtn=%d\n", s->quickBtn, s->companionBtn, s->hudBtn);
+    fprintf(f, "quickbtn=%d\ncompanionbtn=%d\nhudbtn=%d\nquickbtnrev=1\n", s->quickBtn, s->companionBtn, s->hudBtn);
     fprintf(f, "dark=%d\ntheme=%d\nffnormal=%d\ncheats=%d\n", s->darkMode, s->theme, s->ffNormal, s->cheats);
     fprintf(f, "librarygrid=%d\nlibraryrecent=%d\n", s->libraryGrid, s->libraryRecent);
     fprintf(f, "speed=%d\nvolume=%d\nnohints=%d\nonetap=%d\nmute=%d\nautorun=%d\nperf=%d\n", s->gameSpeed,
@@ -177,13 +194,13 @@ bool pd_settings_save(const struct pd_settings* s, const char* path) {
     fprintf(f, "gen5=%d\nnoinfo=%d\ninfofirst=%d\n", s->battleGen5 ? 1 : 0, s->noBattleInfo ? 1 : 0, s->battleInfoFirst ? 1 : 0);
     fprintf(f, "flyclassic=%d\nflightanywhere=%d\nflyon=%d\n", s->flyClassic ? 1 : 0, s->flightAnywhere ? 1 : 0, s->flightVehicle);
     fprintf(f, "reusabletms=%d\ninstanttext=%d\ntradeevos=%d\n", s->reusableTms ? 1 : 0, s->instantText ? 1 : 0, s->tradeEvos ? 1 : 0);
-    fprintf(f, "expandoff=%d\n", s->expandOff ? 1 : 0);
+    fprintf(f, "expandoff=%d\nlang=%s\n", s->expandOff ? 1 : 0, pd_lang_code(s->language));
     for (int i = 0; i < PD_SCENES; i++) fprintf(f, "scene%d=%d\n", i, s->sceneSpeed[i]);
     if (fclose(f) != 0) {
         remove(tmp);
         return false;
     }
-#if defined(__3DS__)
+#if defined(__3DS__) || defined(_WIN32)
     // The SD card's rename won't replace a file: without this only the first settings.ini was ever written, and every
     // later change (THEME, DARK MODE, VIEW ...) was gone at the next start (1.6.0).
     remove(path);

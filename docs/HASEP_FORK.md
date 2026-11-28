@@ -1,6 +1,7 @@
 # The Hasep fork
 
-Based on PokeDaisy by Lidor Itzhari - https://github.com/lidor30/pokedaisy
+Based on PokeDaisy by Lidor Itzhari - https://pokedaisy.com (source: https://gitlab.com/pokedaisy/pokedaisy; it was
+https://github.com/lidor30/pokedaisy until that GitHub account was suspended, 2026-11-26)
 
 This fork adds support for Hasep (Marcogn/pokehns-expansion-plus), a fork of Pokémon Heart and Soul. Everything else
 is PokeDaisy's, merged in as upstream releases. Keep the fork's own changes small and in their own files, so the merges
@@ -35,7 +36,7 @@ field tools, with the addresses swapped. A ROM with a newer layout or format tha
 | `companion/data/Gen3Mon.kt`, `companion/data/NativeReader.kt` | `decodeBoxMon` takes the stat formula (`gen3Stats` by default); `readPcBoxes` passes `hasepArceusStats` while Hasep's ARCEUS FORMULAS is on, and keeps that in its cache key |
 | `companion/data/ActiveTables.kt` | the three item names Hasep appended (`itemNamesHasep`, ids 901 to 903) |
 | `companion/WhatsNew.kt` | the fork's own release notes, newest first |
-| `.github/workflows/release.yml` | a Run workflow button that tags `main` as `v<versionName>` (job `tag`); the build job's wrapper validation allows Azahar's SDL sample jar, as upstream's `ci.yml` does (upstream's `release.yml` doesn't yet: drop ours when it does) |
+| `.github/workflows/release.yml` | a Run workflow button that tags `main` as `v<versionName>` (job `tag`) |
 | `NOTICE`, `README.md`, docs/manual, `docs/ROM_FEATURES.md`, `website/src/data/compat.json` | the modification notice, Hasep's rows |
 | `app/src/test/.../HasepTest.kt`, `fixtures/hasep/`, `fixtures/hasep_battle/` | the table, a new game and a trainer battle read through it (run by `shared/`, so it can't use the app's classes) |
 | `app/src/test/.../app/HasepLibraryTest.kt` | the library takes a Hasep ROM as supported (`CompanionSupport`, an app class) |
@@ -70,7 +71,8 @@ headless on a Hasep build (docs/ROM_FEATURES.md's footnote ᴴ); none was tried 
 `versionName` is PokeDaisy's version plus one more part: `1.5.0.1.1` is the first fork build on PokeDaisy 1.5.0.1
 (PokeDaisy's own hotfixes have four parts, so the fork's part is always the last, whatever PokeDaisy's length).
 PokeDaisy's version merged in is `BuildConfig.UPSTREAM_VERSION` (app/build.gradle.kts), which the upstream notice
-compares with `lidor30/pokedaisy`'s releases. `versionCode` is PokeDaisy's times 100 plus the fork's part (PokeDaisy
+compares with PokeDaisy's releases list on its website (`AppUpdater.UPSTREAM_RELEASES_API`, GitHub's JSON shape; the
+fork's own updates still come from this repo's GitHub releases, `AppUpdater.RELEASES_API`). `versionCode` is PokeDaisy's times 100 plus the fork's part (PokeDaisy
 1.5.0.1 is 20, so 2001). Both only grow, since PokeDaisy's do. After merging PokeDaisy X, set `UPSTREAM_VERSION` to X,
 `versionName` to X.1 and `versionCode` to X's * 100 + 1; a later fork build on the same X bumps the last part.
 WHAT'S NEW: a fork build has notes of its own (`WhatsNew.FORK`, which `isForkBuild` reads: 1.6.0.1 is the fork's first
@@ -80,7 +82,7 @@ with the fork's line first (`onRelease`), so a player updating sees PokeDaisy's 
 ## Merging upstream
 
 ```sh
-git remote add upstream https://github.com/lidor30/pokedaisy   # once
+git remote add upstream https://gitlab.com/pokedaisy/pokedaisy.git   # once (GitHub's lidor30/pokedaisy is gone since 2026-11-26)
 git fetch upstream --tags
 git merge v<PokeDaisy version>   # a release tag, not main: main may hold unreleased work
 # conflicts: keep upstream's side, then put the fork's lines above back in;

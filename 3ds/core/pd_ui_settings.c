@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "pd_ui_internal.h"
+#include "pd_tr.h"
 
 #define TITLE_H 24
 #define LIST_Y (CONTENT_Y + TITLE_H + 4)
@@ -103,6 +104,8 @@ static void setting(struct pd_ui* ui, struct pd_canvas* c, int x, int* y, int w,
 
 // A row shown, not tappable (LOAD STATE with none yet, ASPECT N/A).
 static void muted_row(struct pd_canvas* c, int x, int* y, int w, const char* label, const char* value) {
+    label = pd_tr(label);
+    value = pd_tr(value);
     pd_text(c, x, pd_text_y(*y, ROW_H), label, PD_MUTED, PD_MUTED_SHADOW);
     int vx = x + w * valuePct / 100, past = x + pd_text_width(label) + 8;
     pd_text(c, vx < past ? past : vx, pd_text_y(*y, ROW_H), value, PD_MUTED, PD_MUTED_SHADOW);
@@ -132,6 +135,7 @@ static void flight_area_row(struct pd_ui* ui, struct pd_canvas* c, int x, int* y
 }
 
 static void group(struct pd_canvas* c, int x, int* y, const char* title) {
+    title = pd_tr(title);
     if (railed && groupCount < MAX_GROUPS) {
         groupTop[groupCount] = *y - listTop + 0; // the list's scroll is added back below
         groupName[groupCount++] = title;
@@ -185,7 +189,7 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
     }
     int f = pd_title_box(c, x, CONTENT_Y, w, TITLE_H, PD_TITLE_FILL);
     int ty = pd_text_y(CONTENT_Y, TITLE_H);
-    pd_text(c, x + f + 6, ty, ui->optionSource ? ui->optionSource->title : "SETTINGS", PD_TITLE_TEXT, PD_TITLE_SHADOW);
+    pd_text(c, x + f + 6, ty, ui->optionSource ? ui->optionSource->title : pd_tr("SETTINGS"), PD_TITLE_TEXT, PD_TITLE_SHADOW);
     int right = x + w - f - 6;
     // The TRAINER CARD opens from here (the list below is full): a grey chip at
     // the title window's right, white while pressed, like the tab bar's.
@@ -205,7 +209,7 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
         right = bx - 8;
     }
     if (g->title) {
-        int tx = x + f + 6 + pd_text_width("SETTINGS") + 12;
+        int tx = x + f + 6 + pd_text_width(pd_tr("SETTINGS")) + 12;
         int tw = pd_text_width(g->title);
         if (tw > right - tx) tw = right - tx;
         pd_text_fit(c, right - tw, ty, tw, g->title, PD_TITLE_TEXT, PD_TITLE_SHADOW);
@@ -243,6 +247,8 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
             const struct pd_option_row* row = &ui->optionSource->rows[i];
             ui_row(c, ix, ry, iw, row->label, row->value, false);
             if (i == selected) settings_outline(c, ix - 4, ry, iw + 8, ROW_H);
+            // A host-owned list's rows: a tap is the row (its info rows take none).
+            if (i >= infoCount) ui_add_hit(ui, ix - 4, ry, iw + 8, ROW_H, HIT_OPTION + (i - infoCount));
         }
         pd_unclip(c);
         if (hasBar)
@@ -256,6 +262,8 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
     struct pd_settings* st = ui->settings;
     bool full = host && host->fullSettings;
     ui->viewExpand = host && host->hasExpand && host->expandGame;
+    ui->zoomCount = host ? host->zoomCount : 0;
+    ui->zoomLabels = host ? host->zoomLabels : NULL;
     if (full) group(c, ix, &y, "GAME");
     if (s->valid) {
         const char* place = pd_mapsec_name(g, s->mapsec);
@@ -343,10 +351,19 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
                 pd_screen_mode_name(ui->pixelOff && st->screenMode == PD_SCREEN_PIXEL ? PD_SCREEN_SHARP_125 : st->screenMode));
     if (host && host->hasExpand) {
         if (host->expandGame) {
-            setting(ui, c, ix, &y, iw, SETTING_ASPECT, "ASPECT", pd_aspect_name(st->aspect));
-            // Two values: flips in place (the app's rule for pick-lists is more than two). Only
-            // ZOOM OUT has anything to step back from.
-            if (st->aspect == PD_ASPECT_ZOOM_OUT)
+            // ASPECT is the app's EXPAND on / off (two values, so it flips in place); ZOOM steps the view out
+            // (the app's SETTINGS > SCREEN > ZOOM), and only then is there anything for AUTO ZOOM IN to do.
+            const bool zoomRow = host->zoomCount > 1 && host->zoomLabels;
+            const bool expanded = st->aspect != PD_ASPECT_ORIGINAL;
+            setting(ui, c, ix, &y, iw, SETTING_ASPECT, "ASPECT",
+                    zoomRow ? (expanded ? "EXPAND" : "ORIGINAL") : pd_aspect_name(st->aspect));
+            if (zoomRow && expanded) {
+                int z = st->zoom < 0 ? 0 : st->zoom >= host->zoomCount ? host->zoomCount - 1 : st->zoom;
+                setting(ui, c, ix, &y, iw, SETTING_ZOOM, "ZOOM", host->zoomLabels[z]);
+            }
+            // AUTO ZOOM IN sits right under ZOOM whenever EXPAND is on (the app's SCREEN group): at 1x it has no step to
+            // take yet, and at the first one it is already there.
+            if (expanded && (st->aspect == PD_ASPECT_ZOOM_OUT || zoomRow))
                 setting(ui, c, ix, &y, iw, SETTING_AUTO_ZOOM, "AUTO ZOOM IN", st->autoZoom ? "ON" : "OFF");
         } else {
             // This game's overworld can't be rebuilt: shown, not tappable.
@@ -370,7 +387,7 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
             setting(ui, c, ix, &y, iw, SETTING_FLY_ON, "FLY ON", flight_vehicle_label(st->flightVehicle));
     }
     if (host && host->hasButtonRows) {
-        static const char* const NAMES[PD_BUTTONS] = {"X", "Y", "L2", "R2", "NONE"};
+        static const char* const NAMES[PD_BUTTONS] = {"X", "Y", "L2", "R2", "NONE", "L3"};
         setting(ui, c, ix, &y, iw, SETTING_QUICK_BTN, "QUICK MENU BUTTON", NAMES[st->quickBtn]);
         setting(ui, c, ix, &y, iw, SETTING_COMPANION_BTN, "COMPANION BUTTON", NAMES[st->companionBtn]);
         if (host->hasHud) setting(ui, c, ix, &y, iw, SETTING_HUD_BTN, "HUD CURSOR BUTTON", NAMES[st->hudBtn]);
@@ -396,8 +413,13 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
         if (host->fieldSupported) setting(ui, c, ix, &y, iw, SETTING_AUTO_RUN, "AUTO-RUN", st->autoRun ? "ON" : "OFF");
         setting(ui, c, ix, &y, iw, SETTING_DARK, "DARK MODE", st->darkMode ? "ON" : "OFF");
     }
-    snprintf(buf, sizeof(buf), "%d TABS", ui_bar_count(ui));
+    snprintf(buf, sizeof(buf), pd_tr("%d TABS"), ui_bar_count(ui));
     setting(ui, c, ix, &y, iw, SETTING_TAB_BAR, "TAB BAR", buf);
+    // The app's APP group: LANGUAGE last (above HELP there). The short list keeps it under the game's own rows.
+    if (full) {
+        group(c, ix, &y, "APP");
+        setting(ui, c, ix, &y, iw, SETTING_LANGUAGE, "LANGUAGE", pd_lang_label(st->language, buf, sizeof buf));
+    }
     if (!full && host && host->hasCoreRows) setting(ui, c, ix, &y, iw, SETTING_RESET, "RESET SETTINGS", "...");
     if (full) {
         y += 3;
@@ -428,6 +450,7 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
         }
         setting(ui, c, ix, &y, iw, SETTING_LEAVE, "LEAVE GAME", NULL);
     }
+    if (!full) setting(ui, c, ix, &y, iw, SETTING_LANGUAGE, "LANGUAGE", pd_lang_label(st->language, buf, sizeof buf));
     pd_unclip(c);
     int total = y + ui->settingsScroll - listTop, view = listBottom - listTop;
     lastTotal = total;
@@ -448,7 +471,7 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
 static void title_window(struct pd_canvas* c, int y, const char* title) {
     int x = MARGIN, w = c->w - 2 * MARGIN;
     int f = pd_title_box(c, x, y, w, TITLE_H, PD_TITLE_FILL);
-    pd_text(c, x + f + 6, pd_text_y(y, TITLE_H), title, PD_TITLE_TEXT, PD_TITLE_SHADOW);
+    pd_text(c, x + f + 6, pd_text_y(y, TITLE_H), pd_tr(title), PD_TITLE_TEXT, PD_TITLE_SHADOW);
 }
 
 static void pick_list(struct pd_ui* ui, struct pd_canvas* c, const char* title, const char* const* options, int n,
@@ -464,7 +487,7 @@ static void pick_list(struct pd_ui* ui, struct pd_canvas* c, const char* title, 
     for (int i = 0; i < n; i++) {
         bool on = i == current || ui->pressedId == HIT_OPTION + i;
         if (on) pd_fill(c, ix - 4, ry, iw + 8, ROW_H, PD_ROW_SELECTED);
-        pd_text(c, ix + 10, pd_text_y(ry, ROW_H), options[i], on ? PD_VALUE : PD_LABEL,
+        pd_text(c, ix + 10, pd_text_y(ry, ROW_H), pd_tr(options[i]), on ? PD_VALUE : PD_LABEL,
                 on ? PD_VALUE_SHADOW : PD_LABEL_SHADOW);
         if (i == current) pd_triangle(c, ix, ry + 4, 5, PD_RIGHT, PD_VALUE);
         ui_add_hit(ui, ix - 4, ry, iw + 8, ROW_H, HIT_OPTION + i);
@@ -604,14 +627,14 @@ void ui_more_page(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g
     pd_separator(c, ix, ry, iw, false);
     int bw = 86, bh = 22, by = ry + 2 + gap + ((pd_font_text_small() ? 28 : 40) - bh) / 2;
     pd_text_wrap(c, ix, ry + 2 + gap - (pd_font_text_small() ? 4 : 3), iw - bw - gap, pd_lh(13), pd_font_text_small() ? 2 : 3,
-                 "Tabs that aren't on the tab bar are here. Pick the bar's tabs in TAB BAR.", PD_LABEL, PD_LABEL_SHADOW);
+                 pd_tr("Tabs that aren't on the tab bar are here. Pick the bar's tabs in TAB BAR."), PD_LABEL, PD_LABEL_SHADOW);
     int bx = ix + iw - bw;
     ui_button(ui, c, bx, by, bw, bh, "", HIT_MORE_TAB_BAR);
     const int gear = pd_font_text_small() ? 12 : PD_ICON_GEAR.w;
-    int lw = gear + 4 + pd_text_width("TAB BAR"), lx = bx + (bw - lw) / 2;
+    int lw = gear + 4 + pd_text_width(pd_tr("TAB BAR")), lx = bx + (bw - lw) / 2;
     if (gear != PD_ICON_GEAR.w) ui_icon_smooth(c, NULL, &PD_ICON_GEAR, PD_TITLE_TEXT, lx, by + (bh - gear) / 2, gear);
     else ui_mono(c, &PD_ICON_GEAR, lx, by + (bh - PD_ICON_GEAR.h) / 2, 1, PD_TITLE_TEXT);
-    pd_text(c, lx + gear + 4, pd_text_y(by, bh), "TAB BAR", PD_TITLE_TEXT, PD_TITLE_SHADOW);
+    pd_text(c, lx + gear + 4, pd_text_y(by, bh), pd_tr("TAB BAR"), PD_TITLE_TEXT, PD_TITLE_SHADOW);
 }
 
 static void confirm(struct pd_ui* ui, struct pd_canvas* c, const char* title, const char* text, const char* yes) {
@@ -621,7 +644,7 @@ static void confirm(struct pd_ui* ui, struct pd_canvas* c, const char* title, co
     y += TITLE_H + 4;
     int h = 3 * 16 + 2 * 7 + 6;
     int lf = pd_list_box(c, x, y, w, h);
-    pd_text_wrap(c, x + lf + 6, y + lf + 2, w - 2 * (lf + 6), pd_lh(16), 3, text, PD_LABEL, PD_LABEL_SHADOW);
+    pd_text_wrap(c, x + lf + 6, y + lf + 2, w - 2 * (lf + 6), pd_lh(16), 3, pd_tr(text), PD_LABEL, PD_LABEL_SHADOW);
     y += h + 6;
     int bw = 96;
     ui->startId = HIT_NO; // cancel first
@@ -644,6 +667,10 @@ void ui_overlay(struct pd_ui* ui, struct pd_canvas* c) {
     }
     case PD_OVERLAY_PICK_ASPECT:
         pick_list(ui, c, "ASPECT", ASPECT_NAMES, PD_ASPECTS, ui->settings->aspect);
+        break;
+    case PD_OVERLAY_PICK_ZOOM:
+        if (ui->zoomCount > 0 && ui->zoomLabels)
+            pick_list(ui, c, "ZOOM", ui->zoomLabels, ui->zoomCount, ui->settings->zoom);
         break;
     case PD_OVERLAY_PICK_VIEW: {
         const bool expand = ui->viewExpand;
@@ -680,6 +707,15 @@ void ui_overlay(struct pd_ui* ui, struct pd_canvas* c) {
     case PD_OVERLAY_PICK_FLY_ON:
         pick_list(ui, c, "FLY ON", FLY_ON_NAMES, 4, ui->settings->flightVehicle);
         break;
+    case PD_OVERLAY_PICK_LANGUAGE: {
+        // AUTO, then each language in its own words (never translated: a player lost in a language finds theirs).
+        static const char* names[1 + PD_LANGS];
+        names[0] = "AUTO";
+        for (int i = 0; i < PD_LANGS; i++) names[1 + i] = pd_lang_name(i);
+        int lang = ui->settings->language;
+        pick_list(ui, c, "LANGUAGE", names, 1 + PD_LANGS, lang >= 0 && lang < PD_LANGS ? 1 + lang : 0);
+        break;
+    }
     case PD_OVERLAY_TAB_BAR:
         tab_bar_page(ui, c);
         break;
@@ -717,9 +753,14 @@ void pd_ui_options_view(struct pd_ui* ui,struct pd_canvas* c,const struct pd_gam
     ui_settings_tab(ui,c,g,s,NULL);
 }
 
-void pd_ui_choices_view(struct pd_canvas* c,const char* title,const char* const* choices,int count,int selected){
+void pd_ui_choices_view_ui(struct pd_ui* ui,struct pd_canvas* c,const char* title,const char* const* choices,int count,int selected){
     if(count<1 || count>8)return;
-    struct pd_ui ui={0};ui.pressedId=-1;
+    ui->pressedId=-1;ui->hitCount=0;
     pd_dim(c,230);
-    pick_list(&ui,c,title,choices,count,selected);
+    pick_list(ui,c,title,choices,count,selected);
+}
+
+void pd_ui_choices_view(struct pd_canvas* c,const char* title,const char* const* choices,int count,int selected){
+    struct pd_ui ui={0};
+    pd_ui_choices_view_ui(&ui,c,title,choices,count,selected);
 }

@@ -108,7 +108,7 @@ When PokeDaisy finds a new version, it downloads it and opens Android's installe
 - **Allow installing apps.** The first time, Android asks you to let PokeDaisy install apps ("Install unknown apps"). Allow it, then go back and tap the update again. A download that already finished is reused, so it won't download again.
 - **Same signer, newer version.** Android only installs an update over the app you have if both come from the same place. If you built PokeDaisy yourself or installed a copy from somewhere else, the official update won't go over it. You'd have to uninstall first, and uninstalling deletes everything in PokeDaisy's own folder, so copy your `saves` (and `roms`, if you imported games) out of `Android/data/com.pokedaisy.app/files/` before you do.
 
-You can always get the newest version by hand from the [releases page](https://github.com/lidor30/pokedaisy/releases/latest), and check for one any time with Settings > `VERSION`.
+You can always get the newest version by hand from the [download page](https://pokedaisy.com/#download), and check for one any time with Settings > `VERSION`.
 
 ## The companion is on the wrong screen
 
@@ -120,7 +120,7 @@ If the companion has disappeared from its screen entirely, you may have tapped `
 
 PokeDaisy has no accounts of its own, no ads and no tracking. Your games and saves never leave your device. It only goes online for these:
 
-- **Update check.** It asks GitHub for the newest release when you open the library (and when you tap `VERSION`), and downloads it only if you say so.
+- **Update check.** It asks PokeDaisy's website for the newest release when you open the library (and when you tap `VERSION`), and downloads it only if you say so.
 - **The manual.** `HELP` loads this manual from the PokeDaisy website and keeps a copy for reading offline.
 - **Cover art**, only if you add your own key under Settings > `COVER ART`: from SteamGridDB and RetroAchievements. To find a game's art, RetroAchievements is asked by the ROM's fingerprint (its MD5, or for a DS game the fingerprint RetroAchievements uses for DS carts), never the file.
 - **RetroAchievements**, only if you sign in. Opening a game's `INFO` in the library also asks RetroAchievements whether there's an achievement set for that ROM, by its fingerprint.
@@ -134,8 +134,7 @@ The play time the library uses to ask for support once ([Supporting PokeDaisy](l
 ## How do I report a bug or ask for a game?
 
 - **Want help, or not sure it's a bug?** Ask on [PokeDaisy's Discord](https://discord.gg/vcmyKZZV5q) (Settings > `DISCORD` opens it). It's also the place for ideas and a chat.
-- **No GitHub account?** Use the [feedback page](https://pokedaisy.com/feedback/) for bug reports, game requests and ideas.
-- **On GitHub:** report a bug in [Issues](https://github.com/lidor30/pokedaisy/issues). Ask for a game in [Game requests](https://github.com/lidor30/pokedaisy/discussions/categories/game-requests) and share an idea in [Ideas](https://github.com/lidor30/pokedaisy/discussions/categories/ideas), where you can also upvote other people's.
+- **Report a bug, ask for a game or share an idea** on the [feedback page](https://pokedaisy.com/feedback/). No account needed.
 - **For a game the companion doesn't read,** `ASK FOR SUPPORT` on the companion's NOT SUPPORTED page (or in the game's library `INFO`) fills in the details we need.
 
 For a bug, it helps a lot to say which device you have, which game and version, what you did and what happened instead. Never attach a ROM: a file name and the SHA-1 from the game's `INFO` are enough.

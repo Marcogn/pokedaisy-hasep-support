@@ -8,6 +8,7 @@
 #include <strings.h>
 
 #include "pd_map.h"
+#include "pd_tr.h"
 #include "pd_games.h"
 #include "pd_gb.h"
 #include "pd_ui_internal.h"
@@ -96,7 +97,7 @@ static void build_places(const struct pd_game* g) {
     };
     for (int gi = 0; gi < 3; gi++) {
         if (!groups[gi].n) continue;
-        places[placeCount++] = (struct place) { -1, groups[gi].title };
+        places[placeCount++] = (struct place) { -1, pd_tr(groups[gi].title) };
         for (int i = 0; i < groups[gi].n && placeCount < MAX_PLACES; i++) places[placeCount++] = groups[gi].list[i];
     }
 }
@@ -110,14 +111,14 @@ static void frame(struct pd_canvas* c, int x, int y, int w, int h) {
 
 // The page scaled to the view, each canvas pixel its nearest map pixel.
 static void draw_page(struct pd_canvas* c, const uint32_t* px) {
-    static int col[1024];
-    for (int x = 0; x < view.w && x < 1024; x++) col[x] = crop.l + x * (crop.r - crop.l) / view.w;
+    static int col[4096];
+    for (int x = 0; x < view.w && x < 4096; x++) col[x] = crop.l + x * (crop.r - crop.l) / view.w;
     for (int y = 0; y < view.h; y++) {
         int cy = view.y + y;
         if (cy < c->cy0 || cy >= c->cy1) continue;
         const uint32_t* src = px + (crop.t + y * (crop.b - crop.t) / view.h) * mapW;
         uint32_t* dst = c->px + cy * c->w + view.x;
-        for (int x = 0; x < view.w && x < 1024; x++) {
+        for (int x = 0; x < view.w && x < 4096; x++) {
             int cx = view.x + x;
             if (cx >= c->cx0 && cx < c->cx1) dst[x] = src[col[x]];
         }
@@ -200,6 +201,7 @@ static int label(struct pd_canvas* c, const struct pd_game* g, const char* name,
 // The map's buttons, a row over its top right (MapScreen's), right to left.
 static int buttonRight, buttonTop;
 static void map_button(struct pd_ui* ui, struct pd_canvas* c, const char* text, int id) {
+    text = pd_tr(text);
     int w = pd_text_width(text) + 16;
     buttonRight -= w;
     ui_button(ui, c, buttonRight, buttonTop, w, 22, text, id);
@@ -314,7 +316,7 @@ void ui_fly_overlay(struct pd_ui* ui, struct pd_canvas* c) {
     ui_add_hit(ui, 0, 0, c->w, c->h, HIT_SCRIM);
     int x = MARGIN, w = c->w - 2 * MARGIN, y = CONTENT_Y;
     int f = pd_title_box(c, x, y, w, 24, PD_TITLE_FILL);
-    pd_text(c, x + f + 6, pd_text_y(y, 24), "FLY", PD_TITLE_TEXT, PD_TITLE_SHADOW);
+    pd_text(c, x + f + 6, pd_text_y(y, 24), pd_tr("FLY"), PD_TITLE_TEXT, PD_TITLE_SHADOW);
     y += 28;
     int lf = pd_list_box(c, x, y, w, c->h - y - MARGIN);
     int ix = x + lf, iy = y + lf + 1, iw = w - 2 * lf, ih = c->h - y - MARGIN - 2 * lf - 2;
@@ -341,7 +343,7 @@ void ui_places_overlay(struct pd_ui* ui, struct pd_canvas* c, const struct pd_ga
     ui_add_hit(ui, 0, 0, c->w, c->h, HIT_SCRIM);
     int x = MARGIN, w = c->w - 2 * MARGIN, y = CONTENT_Y;
     int f = pd_title_box(c, x, y, w, 24, PD_TITLE_FILL);
-    pd_text(c, x + f + 6, pd_text_y(y, 24), "PLACES", PD_TITLE_TEXT, PD_TITLE_SHADOW);
+    pd_text(c, x + f + 6, pd_text_y(y, 24), pd_tr("PLACES"), PD_TITLE_TEXT, PD_TITLE_SHADOW);
     y += 28;
     int lf = pd_list_box(c, x, y, w, c->h - y - MARGIN);
     int ix = x + lf, iy = y + lf + 1, iw = w - 2 * lf, ih = c->h - y - MARGIN - 2 * lf - 2;
@@ -478,7 +480,7 @@ enum pd_map_input pd_ui_map_control(int* action, int count, int dx, int dy, bool
 
 struct pd_map_viewport pd_ui_map_view(struct pd_canvas* c, const struct pd_map_source* source) {
     if (!source || !source->pixels || source->width < 1 || source->height < 1 ||
-        source->width > 4096 || source->height > 4096 || c->w < 32 || c->h < 32 || c->w > 1024) {
+        source->width > 4096 || source->height > 4096 || c->w < 32 || c->h < 32 || c->w > 4096) {
         ui_notice(c, "NO MAP", "The region map's art wasn't found", "in this ROM.");
         return (struct pd_map_viewport){0};
     }

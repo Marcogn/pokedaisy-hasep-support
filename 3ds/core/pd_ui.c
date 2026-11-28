@@ -2,6 +2,7 @@
 // Each tab draws itself in its own file (pd_ui_party.c, _battle, _bag,
 // _settings); pd_ui_internal.h has what they share.
 #include "pd_font.h"
+#include "pd_tr.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,7 +35,7 @@ static const char* const TAB_LABELS[PD_TAB_COUNT] = {
     [PD_TAB_ACHIEVEMENTS] = "CHEEVOS",
 };
 
-const char* ui_tab_label(enum pd_tab t) { return t < PD_TAB_COUNT ? TAB_LABELS[t] : ""; }
+const char* ui_tab_label(enum pd_tab t) { return t < PD_TAB_COUNT ? pd_tr(TAB_LABELS[t]) : ""; }
 
 const struct pd_art* ui_tab_art(enum pd_tab t) {
     for (int i = 0; i < UI_BAR_CHOICES; i++)
@@ -91,11 +92,15 @@ int ui_bar_count(const struct pd_ui* ui) {
     return n;
 }
 
+// TAB BAR's rows: only the tabs this game has (GitHub #1346: CHEEVOS, CARD and NUZLOCKE were offered on games without
+// them and never showed). The bits stay per tab, so a tab picked in another game is still on there.
 int ui_configurable_tabs(const struct pd_ui* ui, enum pd_tab out[UI_BAR_CHOICES]) {
     int n = 0;
     for (int i = 0; i < UI_BAR_CHOICES; i++) {
         const enum pd_tab tab = UI_BAR_CHOICE[i];
-        if (!ui->availableTabs || (ui->availableTabs & (1u << tab))) out[n++] = tab;
+        if (ui->drawnGame || ui->content ? ui_tab_available(ui, ui->drawnGame, tab)
+                                         : !ui->availableTabs || (ui->availableTabs & (1u << tab)))
+            out[n++] = tab;
     }
     return n;
 }
@@ -304,14 +309,29 @@ static void tab_bar(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game*
         pd_text(c, x + (SHOULDER_W - pd_text_width("L")) / 2, pd_text_y(by, CHIP_H), "L", PD_TITLE_TEXT, PD_TITLE_SHADOW);
         x += SHOULDER_W + CHIP_GAP;
     }
+    // Equal chips while every label fits one; a longer word (another language's) gets its width and the rest
+    // share what's left, so no label runs over its chip.
+    int widths[PD_MAX_BAR_TABS + 1], textW = 0;
+    bool equal = true;
     for (int i = 0; i < n; i++) {
-        int w = room / n + (i < room % n ? 1 : 0);
+        widths[i] = pd_text_width(ui_tab_label(tabs[i])) + 6;
+        textW += widths[i];
+        equal &= widths[i] <= room / n;
+    }
+    for (int i = 0, extra = room - textW; i < n; i++) {
+        if (equal || extra < 0) widths[i] = room / n + (i < room % n ? 1 : 0);
+        else widths[i] += extra / n + (i < extra % n ? 1 : 0);
+    }
+    for (int i = 0; i < n; i++) {
+        int w = widths[i];
         enum pd_tab t = tabs[i];
         bool open = ui->tab == t && ui->overlay != PD_OVERLAY_MORE;
         chip(ui, c, x, w, open, HIT_TAB + (int) t);
-        int tw = pd_text_width(TAB_LABELS[t]);
-        pd_text(c, x + (w - tw) / 2, pd_text_y(by, CHIP_H), TAB_LABELS[t], open ? PD_VALUE : PD_TITLE_TEXT,
-                open ? PD_VALUE_SHADOW : PD_TITLE_SHADOW);
+        const char* label = ui_tab_label(t);
+        int tw = pd_text_width(label);
+        if (tw > w - 4) tw = w - 4;
+        pd_text_fit(c, x + (w - tw) / 2, pd_text_y(by, CHIP_H), tw, label, open ? PD_VALUE : PD_TITLE_TEXT,
+                    open ? PD_VALUE_SHADOW : PD_TITLE_SHADOW);
         x += w + CHIP_GAP;
     }
     // MORE: lit while a tab it opens is up.
@@ -547,11 +567,13 @@ static void act(struct pd_ui* ui, int id) {
             if (ui->overlay == PD_OVERLAY_PICK_SCREEN) ui->settings->screenMode = i + (ui->pixelOff ? 1 : 0);
             if (ui->overlay == PD_OVERLAY_PICK_FF && i < PD_FF_CHOICES) ui->settings->ffSpeed = PD_FF_SPEEDS[i];
             if (ui->overlay == PD_OVERLAY_PICK_ASPECT && i < PD_ASPECTS) ui->settings->aspect = i;
+            if (ui->overlay == PD_OVERLAY_PICK_ZOOM && i < ui->zoomCount) ui->settings->zoom = i;
             if (ui->overlay == PD_OVERLAY_PICK_VIEW) pd_view_set(ui->settings, i, ui->viewExpand);
             if (ui->overlay == PD_OVERLAY_PICK_SPEED) ui->settings->gameSpeed = i;
             if (ui->overlay == PD_OVERLAY_PICK_SCENE && i < PD_SCENE_SPEED_COUNT) ui->settings->sceneSpeed[ui->scenePick] = i;
             if (ui->overlay == PD_OVERLAY_PICK_VOLUME) ui->settings->gameVolume = (i + 1) * 20;
             if (ui->overlay == PD_OVERLAY_PICK_FLY_ON && i < 4) ui->settings->flightVehicle = i;
+            if (ui->overlay == PD_OVERLAY_PICK_LANGUAGE && i <= PD_LANGS) ui->settings->language = i == 0 ? PD_LANG_AUTO : i - 1;
             close_overlay(ui, PD_ACTION_SETTINGS_CHANGED);
         } else if (id == HIT_YES && ui->overlay == PD_OVERLAY_CONFIRM_RESET) {
             pd_settings_defaults(ui->settings);
@@ -601,6 +623,8 @@ static void act(struct pd_ui* ui, int id) {
         ui->action = PD_ACTION_NUZLOCKE_TOGGLE;
     } else if (id == HIT_SETTING + SETTING_FLY_ON) {
         ui->overlay = PD_OVERLAY_PICK_FLY_ON;
+    } else if (id == HIT_SETTING + SETTING_LANGUAGE) {
+        ui->overlay = PD_OVERLAY_PICK_LANGUAGE;
     } else if (id == HIT_SETTING + SETTING_DARK || id == HIT_SETTING + SETTING_FF_MODE || id == HIT_SETTING + SETTING_CHEATS) {
         bool* flag = id == HIT_SETTING + SETTING_DARK ? &ui->settings->darkMode :
             id == HIT_SETTING + SETTING_FF_MODE ? &ui->settings->ffNormal : &ui->settings->cheats;
@@ -685,6 +709,8 @@ static void act(struct pd_ui* ui, int id) {
     } else if (id == HIT_SETTING + SETTING_AUTO_ZOOM) {
         ui->settings->autoZoom = !ui->settings->autoZoom;
         ui->action = PD_ACTION_SETTINGS_CHANGED;
+    } else if (id == HIT_SETTING + SETTING_ZOOM) {
+        ui->overlay = PD_OVERLAY_PICK_ZOOM;
     } else if (id >= HIT_SETTING && id <= HIT_SETTING + SETTING_ASPECT) {
         static const enum pd_overlay OPENS[] = {
             [SETTING_SCREEN] = PD_OVERLAY_PICK_SCREEN,
@@ -694,7 +720,14 @@ static void act(struct pd_ui* ui, int id) {
             [SETTING_LEAVE] = PD_OVERLAY_CONFIRM_LEAVE,
             [SETTING_ASPECT] = PD_OVERLAY_PICK_ASPECT,
         };
-        ui->overlay = OPENS[id - HIT_SETTING];
+        // With ZOOM's steps (a host that has them), ASPECT is the app's EXPAND on / off: two values, so it
+        // flips in place. A host without them keeps the pick-list.
+        if (id == HIT_SETTING + SETTING_ASPECT && ui->zoomCount > 1) {
+            ui->settings->aspect = ui->settings->aspect == PD_ASPECT_ORIGINAL ? PD_ASPECT_EXPAND : PD_ASPECT_ORIGINAL;
+            ui->action = PD_ACTION_SETTINGS_CHANGED;
+        } else {
+            ui->overlay = OPENS[id - HIT_SETTING];
+        }
     }
 }
 
@@ -709,7 +742,7 @@ bool pd_ui_settings_control(struct pd_ui* ui, int dy, bool accept) {
     return true;
 }
 
-/* A BUTTON row: the next button (X, Y, L2, R2; the HUD's also NONE). A button another action already uses goes to
+/* A BUTTON row: the next button (X, Y, L2, R2, L3; the HUD's also NONE). A button another action already uses goes to
  * this one's old button, so no two actions ever share one; the HUD's NONE can't be handed to the other two. */
 static void cycle_button(struct pd_settings* s, int row) {
     int* mine = row == SETTING_QUICK_BTN ? &s->quickBtn : row == SETTING_COMPANION_BTN ? &s->companionBtn : &s->hudBtn;
@@ -728,7 +761,25 @@ static void cycle_button(struct pd_settings* s, int row) {
     }
 }
 
+// The list under the stylus: the biggest part of a list (pd_hit.scroll) at the point - its whole box, not a row.
+static bool scroll_area_at(struct pd_ui* ui, int x, int y) {
+    const struct pd_hit* best = NULL;
+    for (int i = 0; i < ui->hitCount; i++) {
+        const struct pd_hit* h = &ui->hits[i];
+        if (!h->scroll || x < h->x || x >= h->x + h->w || y < h->y || y >= h->y + h->h) continue;
+        if (!best || h->w * h->h > best->w * best->h) best = h;
+    }
+    ui->scrollAreaW = 0;
+    if (!best) return false;
+    ui->scrollAreaX = best->x;
+    ui->scrollAreaY = best->y;
+    ui->scrollAreaW = best->w;
+    ui->scrollAreaH = best->h;
+    return true;
+}
+
 bool pd_ui_touch(struct pd_ui* ui, int x, int y, bool down) {
+    ui->touchScrollOnly = false;
     if (down) {
         const struct pd_hit* h = hit_at(ui, x, y);
         int id = h ? h->id : -1;
@@ -742,30 +793,52 @@ bool pd_ui_touch(struct pd_ui* ui, int x, int y, bool down) {
             ui->touchLastY = y;
             ui->pressedId = id;
             ui->barDragging = id == HIT_SCROLL_BAR;
-            if (!ui->barDragging) return id != -1;
+            if (!ui->barDragging) {
+                // A row pressed in a list lights inside the list alone.
+                ui->touchScrollOnly = id != -1 && ui->touchScroll && scroll_area_at(ui, x, y);
+                return id != -1;
+            }
         }
         // ... a list's bar follows the stylus: the thumb's middle under it ...
         if (ui->barDragging) {
             int* scroll = scroll_target(ui), span = ui->barH - ui->barThumb;
+            const bool first = ui->pressedId != -1;
+            int was = scroll ? *scroll : 0;
             if (scroll && span > 0) *scroll = ui_clamp_scroll((y - ui->barY - ui->barThumb / 2) * ui->barMax / span, ui->barMax, 0);
             ui->pressedId = -1;
+            if (first) {
+                scroll_area_at(ui, ui->touchX0, ui->touchY0);
+                return true;
+            }
+            if (!scroll || *scroll == was) return false;
+            ui->touchScrollOnly = ui->scrollAreaW > 0;
             return true;
         }
         // ... a list scrolls under a drag ...
         if (ui->touchScroll && !ui->dragging && abs(y - ui->touchY0) > DRAG_SLOP) {
+            // The pressed row lets go and the list moves: all of it inside the list.
             ui->dragging = true;
             ui->pressedId = -1;
-        }
-        if (ui->dragging) {
             int* scroll = scroll_target(ui);
             if (scroll) *scroll -= y - ui->touchLastY;
             ui->touchLastY = y;
+            ui->touchScrollOnly = scroll_area_at(ui, ui->touchX0, ui->touchY0);
+            return true;
+        }
+        if (ui->dragging) {
+            int* scroll = scroll_target(ui);
+            // A stylus held still moves nothing: no redraw.
+            if (y == ui->touchLastY || !scroll) return false;
+            *scroll -= y - ui->touchLastY;
+            ui->touchLastY = y;
+            ui->touchScrollOnly = ui->scrollAreaW > 0;
             return true;
         }
         ui->touchLastY = y;
         // ... and sliding off an element cancels it; another is never picked up.
         if (ui->pressedId != -1 && id != ui->pressedId) {
             ui->pressedId = -1;
+            ui->touchScrollOnly = ui->touchScroll && ui->scrollAreaW > 0;
             return true;
         }
         return false;
@@ -778,6 +851,7 @@ bool pd_ui_touch(struct pd_ui* ui, int x, int y, bool down) {
     }
     if (ui->dragging) {
         ui->dragging = false;
+        ui->touchScrollOnly = ui->scrollAreaW > 0;
         return true;
     }
     int id = ui->pressedId;
@@ -785,6 +859,21 @@ bool pd_ui_touch(struct pd_ui* ui, int x, int y, bool down) {
     if (id == -1) return false;
     act(ui, id);
     return true;
+}
+
+void pd_ui_draw_scrolled(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g,
+                         const struct pd_snapshot* s, const struct pd_host_info* host) {
+    if (ui->scrollAreaW <= 0 || ui->tab == PD_TAB_BATTLE) {
+        pd_ui_draw(ui, c, g, s, host);
+        return;
+    }
+    // A scrolled list sits inside its own filled window, which paints over the backdrop there: it isn't drawn under it.
+    const bool keep = ui->keepBackdrop;
+    ui->keepBackdrop = true;
+    pd_canvas_limit(c, ui->scrollAreaX, ui->scrollAreaY, ui->scrollAreaW, ui->scrollAreaH);
+    pd_ui_draw(ui, c, g, s, host);
+    pd_canvas_unlimit(c);
+    ui->keepBackdrop = keep;
 }
 
 int pd_ui_tab_menu_count(const struct pd_ui* ui) {

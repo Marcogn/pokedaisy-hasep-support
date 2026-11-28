@@ -142,8 +142,10 @@ static const PkNdsFieldGame ORIGIN_HEARTGOLD = {
     0,
     // Its battle manager (0x274 bytes, made by its overlay 14's battle init, which gOverlayTemplate_Battle runs): its
     // touch screen's controller at +0x238, whose +0x10 is the input handler while the battle waits for the player (headless:
-    // 0x0220368D at the commands and the moves, 0x02203B61 at the party after a faint, 0 while the turn plays).
-    0x02255BAC, 0x238, 0x10,
+    // 0x0220368D at the commands and the moves, 0x02203B61 at the party after a faint, 0 while the turn plays). Its
+    // UI object at +0x234 runs the waiting panel's handler at +0x57C: 0x02202445 the commands, 0x02202F4D the moves
+    // (0x02202955 the bag, 0x0220270D the party; a wild and a trainer battle headless).
+    0x02255BAC, 0x238, 0x10, 0x234, 0x57C, 0x02202445, 0x02202F4D,
 };
 
 // Black (USA / Europe, IRBO rev 0): no decomp, so from headless captures (nds_dump dumps of the field, a text box, the X
@@ -394,11 +396,19 @@ static int inMainRam(uint32_t p) { return p >= 0x02000000u && p < 0x02400000u; }
 // BattleSystem.battleInput: its text objects are set only while a panel is drawn; battler 0's selection step
 // (BattleContext's first byte, SSI_STATE_*) is 1 / 2 at the commands, 3 / 4 the moves, 7 / 8 the bag, 9 / 10 the party.
 // A menu screen whose page is the touch screen's alone: its template's init function (the child's first word) and, where
-// only some pages are, the app's states (OverlayManager +0x14) on those pages as a bit mask (0 = every page).
+// only some pages are, the app's states (OverlayManager +0x14) on those pages as a bit mask (0 = every page). [overlay]: the
+// template's overlay (its fourth word, 0 = any) for an app that loads where many others do: HeartGold's options (overlay 54)
+// share their init's address with 24 other apps, its starter pick (61) among them, and Platinum's (74) with 26 - each was
+// read as the options (the starter's table and Elm's words hidden behind the floating touch screen, Discord 1.6.2-beta.1).
 struct PkNdsTouchApp {
     uint32_t init;
     uint32_t states;
+    uint32_t overlay;
 };
+
+// HeartGold / SoulSilver's options app's overlay, and Platinum's (every language: their carts' templates).
+static const uint32_t OPTIONS_OVERLAY_HGSS = 54;
+static const uint32_t OPTIONS_OVERLAY_PLATINUM = 74;
 
 struct PkNdsTouchRules {
     const PkNdsFieldGame* game;
@@ -426,21 +436,21 @@ static const PkNdsTouchRules TOUCH_RULES[] = {
     }, 0x10C, {}, 0xD8 },
     { &HEARTGOLD_US, 0x0203BEF1, 0x19C, 0x4D0, {
         { 0x02078E31, 0 },                                      // the party
-        { 0x021E5901, 0 },                                      // the options
+        { 0x021E5901, 0, OPTIONS_OVERLAY_HGSS },                // the options
         { 0x021E5AA1, (1u << 0) | (1u << 2) | (1u << 5) | (1u << 6) },   // the Pokédex (HeartGold)
         { 0x021E5A9D, (1u << 0) | (1u << 2) | (1u << 5) | (1u << 6) },   // the Pokédex (SoulSilver)
     }, 0x10C, {}, 0xD8 },
     // German HeartGold / SoulSilver: the US apps, their overlays 0x20 lower (scripts/port_nds_fns.py, checked headless).
     { &HEARTGOLD_DE, 0x0203BEF1, 0x19C, 0x4D0, {
         { 0x02078E31, 0 },                                      // the party
-        { 0x021E58E1, 0 },                                      // the options
+        { 0x021E58E1, 0, OPTIONS_OVERLAY_HGSS },                // the options
         { 0x021E5A81, (1u << 0) | (1u << 2) | (1u << 5) | (1u << 6) },   // the Pokédex (HeartGold)
         { 0x021E5A7D, (1u << 0) | (1u << 2) | (1u << 5) | (1u << 6) },   // the Pokédex (SoulSilver)
     }, 0x10C, {}, 0xD8 },
     // The French carts: the US apps at their French addresses (the ARM9's the same, the overlays 0x20 higher).
     { &HEARTGOLD_FR, 0x0203BEF1, 0x19C, 0x4D0, {
         { 0x02078E31, 0 },                                      // the party
-        { 0x021E5921, 0 },                                      // the options
+        { 0x021E5921, 0, OPTIONS_OVERLAY_HGSS },                // the options
         { 0x021E5AC1, (1u << 0) | (1u << 2) | (1u << 5) | (1u << 6) },   // the Pokédex (HeartGold)
         { 0x021E5ABD, (1u << 0) | (1u << 2) | (1u << 5) | (1u << 6) },   // the Pokédex (SoulSilver)
     }, 0x10C, {}, 0xD8 },
@@ -449,11 +459,11 @@ static const PkNdsTouchRules TOUCH_RULES[] = {
     // command selection's states the same). The party and the options are top-screen pages, their touch screen a picture.
     { &PLATINUM_US_REV1, 0, 0x19C, 0x4D0, {}, 0, {
         { 0x0207E0B9, 0 },   // the party
-        { 0x021D0D81, 0 },   // the options
+        { 0x021D0D81, 0, OPTIONS_OVERLAY_PLATINUM },   // the options
     } },
     { &PLATINUM_FR, 0, 0x19C, 0x4D0, {}, 0, {
         { 0x0207E159, 0 },   // the party
-        { 0x021D0F61, 0 },   // the options
+        { 0x021D0F61, 0, OPTIONS_OVERLAY_PLATINUM },   // the options
     } },
 };
 
@@ -463,6 +473,7 @@ static int pageIn(const PkNdsTouchApp* apps, int n, uint32_t (*read32)(uint32_t)
     for (int i = 0; i < n; i++) {
         const PkNdsTouchApp& a = apps[i];
         if (!a.init || a.init != init) continue;
+        if (a.overlay && read32(child + 0xC) != a.overlay) continue;
         if (!a.states) return 1;
         uint32_t state = read32(child + 0x14);
         return state < 32 && (a.states >> state & 1);
@@ -515,6 +526,10 @@ struct PkNdsGen5Touch {
     uint32_t startMenuEvent;  // the X menu's event function (Thumb)
     int touchOnly[4];         // apps' overlays all on the touch screen (0: none)
     int offScd, offInput, offSubscreen;   // btlv_core -> btlv_scd, btlv_scd -> btlv_input, btlv_scd's opened screen
+    // Before the GameSystem exists (a new game's intro): the running app's overlay (a static word, 0 = not mapped) and
+    // the name entry's, whose keyboard is on the touch screen (the player's and the rival's names).
+    uint32_t introOverlay;
+    int nameEntryOverlay;
 };
 
 // The bag (Black / White 70, their sequels 142) isn't one: the item picked shows on the top screen, its picture, count
@@ -530,8 +545,11 @@ static const PkNdsGen5Touch GEN5_TOUCH[] = {
     // (party 165, trainer card 186, options 140; the Pokédex, 302, and the bag, 142, both screens), btlv_scd 0x1C4 into the core,
     // btlv_input 0xBC into it, the opened screen at +0xA4; the rest Black's. White 2: Black 2's code 0x40 higher (its X
     // menu's function and apps checked on its save; its battle not reached headless: Black 2's structs).
-    { &BLACK2_US, 0x0215A875, { 165, 186, 140, 0 }, 0x1C4, 0xBC, 0xA4 },
-    { &WHITE2_US, 0x0215A8B5, { 165, 186, 140, 0 }, 0x1C4, 0xBC, 0xA4 },
+    // Their intros (Discord, 2026-11-17: the name entry's keyboard never came up on one screen): the running app's overlay
+    // at 0x02141910 (White 2: 0x02141950), 31 on the name entry, 21 through the rest, 0 from the field on (headless, a new
+    // game on each).
+    { &BLACK2_US, 0x0215A875, { 165, 186, 140, 0 }, 0x1C4, 0xBC, 0xA4, 0x02141910, 31 },
+    { &WHITE2_US, 0x0215A8B5, { 165, 186, 140, 0 }, 0x1C4, 0xBC, 0xA4, 0x02141950, 31 },
 };
 
 // The language ports (gamedata/nds/ports.toml, pk_nds_ports_gen.h): each its base cart's tables with its own words. Built
@@ -595,8 +613,8 @@ static const PortTables& ports()
             t.offBattleInput = 0x19C;
             t.offPanelShown = 0x4D0;
             t.touchOnly[0] = { r.partyInit, 0 };
-            t.touchOnly[1] = { r.optionsInit, 0 };
-            t.touchOnly[2] = { r.dexInit, (1u << 0) | (1u << 2) | (1u << 5) | (1u << 6) };
+            t.touchOnly[1] = { r.optionsInit, 0, OPTIONS_OVERLAY_HGSS };
+            t.touchOnly[2] = { r.dexInit, (1u << 0) | (1u << 2) | (1u << 5) | (1u << 6), 0 };
             t.offMenuInputState = 0x10C;
             t.offFieldTouch = 0xD8;
             p.touch4.push_back(t);
@@ -610,7 +628,7 @@ static const PortTables& ports()
             t.offBattleInput = 0x19C;
             t.offPanelShown = 0x4D0;
             t.topOnly[0] = { r.partyInit, 0 };
-            t.topOnly[1] = { r.optionsInit, 0 };
+            t.topOnly[1] = { r.optionsInit, 0, OPTIONS_OVERLAY_PLATINUM };
             p.touch4.push_back(t);
         }
         for (int i = 0; i < PK_NDS_PORTS5_COUNT; i++) {
@@ -647,6 +665,23 @@ static const int GEN5_ACMD_PARTY = 5;
 // leaves the command ~12 frames on (headless, Black 2 on the player's state at that prompt, 2026-11-09).
 static const int GEN5_ACMD_SWITCH_ASK = 4;
 static int gen5SwitchAsked;   // the prompt was up during this GEN5_ACMD_SWITCH_ASK
+// Field reads since the battle's overlay went (-1: the field has been back since). GEN5_BATTLE_CLOSING of them are its
+// closing overlays'.
+static int gen5SinceBattle = -1;
+static const int GEN5_BATTLE_CLOSING = 16;
+// btlv_input's resource pointer: cleared while the move to forget is picked. A fifth move at a level-up asks FORGET / KEEP
+// OLD MOVES! (panel 4), then on FORGET the moves are a screen of their own: the input module torn down, the panel 0, the
+// adapter's command what it was (GitHub #916 / #1077: Black headless, CHARMELEON learning DRAGON RAGE on Route 1; the
+// word is set again as a move is picked and stays set through the battle's end).
+static const int GEN5_OFF_INPUT_RES = 0x48;
+static const int GEN5_ACMD_MESSAGES = 8;   // the battle playing out: its messages, the level-up's prompts and the moves
+static int gen5ForgetAsked;  // the FORGET prompt (panel 4) was up during this command
+static int gen5ForgetCommand;
+// Frames since that prompt went: the list takes 20 to come up after FORGET (headless), so the touch screen stays up that
+// long rather than closing and opening again; a prompt that leads on to messages (KEEP OLD MOVES, then "stop learning")
+// keeps it up these few frames more at most.
+static int gen5ForgetGap;
+static const int GEN5_FORGET_GAP = 48;   // field reads (one a frame in the app; nds_dump makes two)
 
 static const PkNdsGen5Touch* gen5Touch(const PkNdsFieldGame* g)
 {
@@ -660,7 +695,7 @@ static const PkNdsGen5Touch* gen5Touch(const PkNdsFieldGame* g)
 static int byteAt(uint32_t (*read32)(uint32_t), uint32_t a) { return (int) ((read32(a & ~3u) >> ((a & 3) * 8)) & 0xFF); }
 
 static int gen5BattlePanel(const PkNdsFieldGame* g, const PkNdsGen5Touch* t, uint32_t (*read32)(uint32_t), uint32_t proc,
-                           int* panel, int* waiting, int* subscreen)
+                           int* panel, int* waiting, int* subscreen, int* inputDown = nullptr)
 {
     uint32_t main = read32(proc + g->offProcWork);
     uint32_t client = inMainRam(main) ? read32(main + g->offClient) : 0;
@@ -671,6 +706,7 @@ static int gen5BattlePanel(const PkNdsFieldGame* g, const PkNdsGen5Touch* t, uin
     *panel = byteAt(read32, input + GEN5_OFF_PANEL);
     *waiting = byteAt(read32, scd + GEN5_OFF_WAITING) && !read32(input + GEN5_OFF_SLIDE);
     *subscreen = byteAt(read32, scd + t->offSubscreen);
+    if (inputDown) *inputDown = read32(input + GEN5_OFF_INPUT_RES) == 0;
     return 1;
 }
 
@@ -692,6 +728,12 @@ static uint32_t managedBattleInput(const PkNdsFieldGame* g, uint32_t (*read32)(u
     return inMainRam(ui) ? read32(ui + g->offUiHandler) : 0;
 }
 
+// The commands' / the moves' panel is still drawn after the choice was made (the controller past SELECTION_SCREEN_INPUT):
+// ~6 frames of it going (headless, HeartGold on Route 29, a move picked by touch). Not a prompt: read as one, the touch
+// screen flashed in before every move (Discord, 1.6.1 and 1.6.2-beta.1). Cleared once no panel is drawn, before any
+// prompt of its own ("Use next Pokemon?", YES / NO) comes up.
+static int choicePanelLeft;
+
 // The touch bits for a battle child process [child] (its data the BattleSystem). While the controller waits for the
 // player (SELECTION_SCREEN_INPUT), battler 0's step says which: 1 - 4 the commands and the moves (what BATTLE BUTTONS stand
 // in for - whatever BattleMenuID draws them: HG redraws the commands under another one after a move's CANCEL), 7 - 10 the
@@ -699,9 +741,14 @@ static uint32_t managedBattleInput(const PkNdsFieldGame* g, uint32_t (*read32)(u
 // the touch screen's.
 static int battleTouch(const PkNdsFieldGame* g, const PkNdsTouchRules* t, uint32_t (*read32)(uint32_t), uint32_t child)
 {
-    // A battle of its own (Origin HeartGold): BATTLE BUTTONS can't steer its panels, so whatever waits for a tap is the
-    // touch screen's.
-    if (g->battleManagerPtr) return managedBattleInput(g, read32) ? PK_NDS_FIELD_TOUCH : 0;
+    // A battle of its own (Origin HeartGold): its commands and moves sit where HeartGold's do, so BATTLE BUTTONS press
+    // them; anything else waiting for a tap (the party, a prompt) is the touch screen's.
+    if (g->battleManagerPtr) {
+        if (!managedBattleInput(g, read32)) return 0;
+        uint32_t panels = read32(read32(g->battleManagerPtr) + g->offBattlePanels);
+        uint32_t fn = inMainRam(panels) ? read32(panels + g->offPanelFn) : 0;
+        return fn == g->commandsFn || fn == g->movesFn ? PK_NDS_FIELD_TOUCH_BATTLE_MENU : PK_NDS_FIELD_TOUCH;
+    }
     uint32_t bs = read32(child + 0x1C);
     if (!inMainRam(bs)) return 0;
     uint32_t ctx = read32(bs + g->offBattleContext);
@@ -730,9 +777,13 @@ static int battleTouch(const PkNdsFieldGame* g, const PkNdsTouchRules* t, uint32
         if (step >= 7 && step <= 10) return PK_NDS_FIELD_TOUCH | PK_NDS_FIELD_TOUCH_FADES;
         // The commands and the moves (1 - 4), the steps between them (0 - 2: back from the moves goes through the
         // command init, its panel still drawn), a message's wait (15): the battle buttons' own.
-        if (step <= 4 || step == 15) return panel ? PK_NDS_FIELD_TOUCH_BATTLE_MENU : 0;
+        if (step <= 4 || step == 15) {
+            choicePanelLeft = panel;
+            return panel ? PK_NDS_FIELD_TOUCH_BATTLE_MENU : 0;
+        }
     }
-    return panel ? PK_NDS_FIELD_TOUCH : 0;
+    if (!panel) choicePanelLeft = 0;
+    return panel && !choicePanelLeft ? PK_NDS_FIELD_TOUCH : 0;
 }
 
 // An encounter rate: a u32 (Platinum) or a u8 (HeartGold / SoulSilver), read and written through the aligned word.
@@ -778,6 +829,14 @@ int pk_nds_field_screen_touch(const PkNdsFieldGame* g, int bits, uint32_t dispCn
     return bits == PK_NDS_FIELD_KNOWN && dispCntA == NAMING_SCREEN_DISPCNT ? PK_NDS_FIELD_TOUCH : 0;
 }
 
+int pk_nds_field_screen_bits(int bits, bool darkTop, bool darkBottom)
+{
+    if (darkTop && !darkBottom && !(bits & (PK_NDS_FIELD_SCREEN | PK_NDS_FIELD_BATTLE))) bits |= PK_NDS_FIELD_TOUCH;
+    if (darkTop) bits |= PK_NDS_FIELD_DARK_TOP;
+    if (darkBottom) bits |= PK_NDS_FIELD_DARK_BOTTOM;
+    return bits;
+}
+
 // Gen 5: the GameSystem's running proc, or 0.
 static uint32_t gen5Proc(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t), uint32_t gs)
 {
@@ -815,9 +874,15 @@ int pk_nds_gen5_battle_panel(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_
 // other panel (a prompt, a double's or triple's choice of target: panel 3) is the touch screen's.
 static int gen5BattleTouch(const PkNdsFieldGame* g, const PkNdsGen5Touch* t, uint32_t (*read32)(uint32_t), uint32_t proc)
 {
-    int panel = 0, waiting = 0, sub = 0;
-    if (!gen5BattlePanel(g, t, read32, proc, &panel, &waiting, &sub)) return 0;
+    int panel = 0, waiting = 0, sub = 0, inputDown = 0;
+    if (!gen5BattlePanel(g, t, read32, proc, &panel, &waiting, &sub, &inputDown)) return 0;
     int command = gen5BattleCommand(g, read32);
+    // The move to forget: only right after the FORGET prompt under the same command, so the input module's gaps elsewhere
+    // (it's rebuilt as a battle starts) never float anything in.
+    if (command != gen5ForgetCommand) gen5ForgetAsked = 0;
+    gen5ForgetCommand = command;
+    if (command == GEN5_ACMD_MESSAGES && panel == 4 && !inputDown) gen5ForgetAsked = 1, gen5ForgetGap = 0;
+    else if (gen5ForgetAsked && panel == 0 && (inputDown || ++gen5ForgetGap <= GEN5_FORGET_GAP)) return PK_NDS_FIELD_TOUCH;
     if (command == g->battleSelecting) {
         if (panel == 1 || panel == 2) return waiting ? PK_NDS_FIELD_TOUCH_BATTLE_MENU : 0;
         if (sub == 2 || sub == 3) return PK_NDS_FIELD_TOUCH | PK_NDS_FIELD_TOUCH_FADES;
@@ -842,7 +907,8 @@ static int holding5;
 void pk_nds_field_reset_wild(void)
 {
     holding = holding5 = checked = 0;
-    gen5SwitchAsked = 0;
+    gen5SwitchAsked = gen5ForgetAsked = 0;
+    gen5SinceBattle = -1;
 }
 
 static void gen5Wild(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t), void (*write32)(uint32_t, uint32_t),
@@ -854,16 +920,31 @@ static int gen5FieldState(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t),
 {
     int bits = PK_NDS_FIELD_KNOWN;
     uint32_t gs = read32(g->fieldSystemPtr);
-    if (!inMainRam(gs)) return bits;   // the title screen, the intro
+    const PkNdsGen5Touch* touch = gen5Touch(g);
+    if (!inMainRam(gs)) {
+        // The title screen, the intro: nothing to read but the name entry, a screen on both (the prompt over its keyboard).
+        if (touch && touch->introOverlay && (int) read32(touch->introOverlay) == touch->nameEntryOverlay)
+            bits |= PK_NDS_FIELD_MENU | PK_NDS_FIELD_LOCKED | PK_NDS_FIELD_TOUCH;
+        return bits;
+    }
     uint32_t proc = gen5Proc(g, read32, gs);
     if (!proc) return bits;
     int overlay = (int) read32(proc + g->offProcOverlay);
     uint32_t fieldMap = read32(gs + g->offFieldMap);
     uint32_t event = read32(gs + g->offEvent);
-    const PkNdsGen5Touch* touch = gen5Touch(g);
-    if (overlay == g->battleOverlay)
+    if (overlay == g->battleOverlay) {
+        gen5SinceBattle = 0;
         return bits | PK_NDS_FIELD_BATTLE | PK_NDS_FIELD_LOCKED | (touch ? gen5BattleTouch(g, touch, read32, proc) : 0);
-    gen5SwitchAsked = 0;
+    }
+    gen5SwitchAsked = gen5ForgetAsked = 0;
+    // The way back from a battle: a few frames of its closing overlay (92 in Black), then the field's own overlay while
+    // its map loads (~95 frames). Neither is an app on the touch screen; read as one, the touch screen floated in empty,
+    // with its loading dots, after every battle (headless, Black on Route 1). The field's next app comes in as usual.
+    if (gen5SinceBattle >= 0 && gen5SinceBattle < 1000) gen5SinceBattle++;
+    const bool fieldReady = overlay == g->fieldOverlay && inMainRam(fieldMap);
+    if (fieldReady) gen5SinceBattle = -1;
+    else if (gen5SinceBattle >= 0 && (overlay == g->fieldOverlay || gen5SinceBattle <= GEN5_BATTLE_CLOSING))
+        return bits | PK_NDS_FIELD_LOCKED;
     if (overlay != g->fieldOverlay || !inMainRam(fieldMap)) {
         bits |= PK_NDS_FIELD_MENU | PK_NDS_FIELD_LOCKED;
         if (touch) {
@@ -960,6 +1041,115 @@ int pk_nds_bgm_settle(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t))
         return (int) ((i << 16) | target);
     }
     return -1;
+}
+
+// EXP SHARE on the DS.
+// Gen 4 (Platinum US rev 1, HeartGold / SoulSilver US; pret's pokeplatinum / pokeheartgold): BtlCmd_CalcExpGain counts the
+// party Pokémon standing with their bit in BattleContext.sideGetExpMask[the foe's side] (+0xA4, two words: set as each one
+// is sent out, cleared for a new foe) and gives each `gainedExp` (+0x9C) = the EXP over that count - or, with an Exp.
+// Share held, half of it over that count, the other half (`sharedExp`, +0xA0) over the holders; GetExp pays the masked
+// ones and the holders, never the fainted. FULL EXP divides by 1 (`ldr r1, [sp, #4]`, the count, -> `movs r1, #1`, at
+// +0x102 and +0x142 of the function) and takes the whole EXP on the Exp. Share path (+0x104: `adds r0, r4, #0`, the halved
+// EXP, -> `adds r0, r0, #0`, the whole). The same code at those offsets in both games, read off headless battles.
+// Gen 5 (Black / White / Black 2 / White 2 US; no decomp: the battle overlay's EXP routine, found by the traded bonus's
+// fx32 0x1B33 and read in Ghidra): each foe's BTL_POKEPARAM keeps who fought it (+0xD0 a count, +0xD1 the ids, up to 24);
+// the routine counts the standing ones and gives each the EXP over that count - with an Exp. Share (item 216) held, the
+// EXP halved first (`subs r1, r1, r0`), the half over the holders. FULL EXP: that `subs` -> a `nop` (the participants keep
+// the whole) and the count -> 1 (`adds r1, r6, #0` -> `movs r1, #1`). White is Black's code 0x20 higher, White 2 Black
+// 2's 0x40.
+// SPLIT (and FULL) mark every party Pokémon that isn't an egg as having fought, every frame of a battle: Gen 4 the
+// masks, Gen 5 every foe's list (the player's ids are their party places, the mask's bits). The patch: all of a game's
+// sites or none, only over the bytes expected (the battle's overlay is loaded only in a battle), put back when FULL goes,
+// so with the item held everyone gets the whole EXP and a holder its half on top.
+namespace {
+struct ExpSite { uint32_t addr; uint16_t orig, patched; };
+struct ExpGame { int callSet; ExpSite sites[3]; int n; };
+constexpr uint16_t THUMB_NOP = 0x46C0;   // mov r8, r8
+const ExpGame EXP_GAMES[] = {
+    {1, {{0x02241D34 + 0x102, 0x9901, 0x2101}, {0x02241D34 + 0x104, 0x1C20, 0x1C00}, {0x02241D34 + 0x142, 0x9901, 0x2101}}, 3},
+    {2, {{0x0223E6A0 + 0x102, 0x9901, 0x2101}, {0x0223E6A0 + 0x104, 0x1C20, 0x1C00}, {0x0223E6A0 + 0x142, 0x9901, 0x2101}}, 3},
+    {3, {{0x021CB368, 0x1A09, THUMB_NOP}, {0x021CB3EE, 0x1C31, 0x2101}}, 2},   // Black (overlay 93)
+    {4, {{0x021CB388, 0x1A09, THUMB_NOP}, {0x021CB40E, 0x1C31, 0x2101}}, 2},   // White
+    {5, {{0x021AEEB0, 0x1A09, THUMB_NOP}, {0x021AEF36, 0x1C31, 0x2101}}, 2},   // Black 2 (overlay 167)
+    {6, {{0x021AEEF0, 0x1A09, THUMB_NOP}, {0x021AEF76, 0x1C31, 0x2101}}, 2},   // White 2
+};
+
+// Gen 5: every foe-side BTL_POKEPARAM's who-fought-it list set to the mask's ids. The main module holds two BTL_POKECONs,
+// the clients' (+0xC8) and the server's (+0xC8 + 0xE8: the EXP routine's, through the server flow's +8), each a party a
+// client from +4, 0x1C bytes apart: { BTL_POKEPARAM* member[6], u32 count }; client 0 the player's, left alone.
+void gen5MarkFought(const PkNdsFieldGame* g, uint32_t mask, uint32_t (*read32)(uint32_t), void (*write32)(uint32_t, uint32_t))
+{
+    uint32_t gs = read32(g->fieldSystemPtr);
+    uint32_t proc = inMainRam(gs) ? gen5Proc(g, read32, gs) : 0;
+    if (!proc || (int) read32(proc + g->offProcOverlay) != g->battleOverlay) return;
+    uint32_t main = read32(proc + g->offProcWork);
+    if (!inMainRam(main)) return;
+    uint8_t list[8] = {0};
+    int n = 0;
+    for (int slot = 0; slot < 6; slot++) if (mask & (1u << slot)) list[1 + n++] = (uint8_t) slot;
+    list[0] = (uint8_t) n;
+    const uint32_t w0 = list[0] | (list[1] << 8) | (list[2] << 16) | ((uint32_t) list[3] << 24);
+    const uint32_t w1 = list[4] | (list[5] << 8) | (list[6] << 16) | ((uint32_t) list[7] << 24);
+    for (uint32_t con : { main + 0xC8, main + 0xC8 + 0xE8 }) {
+        for (int client = 1; client < 4; client++) {
+            const uint32_t party = con + 4 + client * 0x1C;
+            const uint32_t count = read32(party + 0x18);
+            if (count == 0 || count > 6) continue;
+            for (uint32_t i = 0; i < count; i++) {
+                const uint32_t pp = read32(party + i * 4);
+                if (!inMainRam(pp) || (pp & 3)) continue;
+                if (read32(pp + 0xD0) != w0) write32(pp + 0xD0, w0);
+                if (read32(pp + 0xD4) != w1) write32(pp + 0xD4, w1);
+            }
+        }
+    }
+}
+}
+
+bool pk_nds_exp_share_tick(const PkNdsFieldGame* g, int mode, uint32_t mask, bool patched, uint32_t (*read32)(uint32_t),
+                           void (*write32)(uint32_t, uint32_t), void (*write16)(uint32_t, uint16_t))
+{
+    if (!g) return false;
+    const ExpGame* e = nullptr;
+    for (const ExpGame& x : EXP_GAMES) if (x.callSet == g->callSet) e = &x;
+    if (!e) return false;
+    auto r16 = [&](uint32_t a) { return (uint16_t) (read32(a & ~3u) >> ((a & 2) * 8)); };
+    // FULL EXP's patch: all of the game's sites the game's (or ours) before anything changes.
+    bool orig = true, ours = true;
+    for (int k = 0; k < e->n; k++) {
+        const uint16_t now = r16(e->sites[k].addr);
+        orig &= now == e->sites[k].orig;
+        ours &= now == e->sites[k].patched;
+    }
+    if (mode == 2 && orig) {
+        for (int k = 0; k < e->n; k++) write16(e->sites[k].addr, e->sites[k].patched);
+        ours = true;
+    } else if (mode != 2 && patched && ours) {
+        for (int k = 0; k < e->n; k++) write16(e->sites[k].addr, e->sites[k].orig);
+        ours = false;
+    }
+    // SPLIT / FULL: who fought, in a battle.
+    if (mode != 0 && mask) {
+        if (g->gen == 5) {
+            gen5MarkFought(g, mask, read32, write32);
+        } else if (const uint32_t ctx = pk_nds_battle_context(g, read32)) {
+            for (uint32_t side = 0; side < 2; side++)
+                if (read32(ctx + 0xA4 + side * 4) != mask) write32(ctx + 0xA4 + side * 4, mask);
+        }
+    }
+    return mode == 2 && ours;
+}
+
+uint32_t pk_nds_battle_context(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t))
+{
+    if (!g || g->gen == 5 || g->battleManagerPtr || !g->offBattleContext) return 0;
+    uint32_t fs = read32(g->fieldSystemPtr);
+    uint32_t pm = inMainRam(fs) ? read32(fs + g->offProcessManager) : 0;
+    uint32_t child = inMainRam(pm) ? read32(pm + 4) : 0;
+    if (!inMainRam(child) || read32(child) != read32(g->battleTemplate)) return 0;
+    uint32_t bs = read32(child + 0x1C);   // the battle's OverlayManager: its data is the BattleSystem
+    uint32_t ctx = inMainRam(bs) ? read32(bs + g->offBattleContext) : 0;
+    return inMainRam(ctx) ? ctx : 0;
 }
 
 int pk_nds_battle_command(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t))
@@ -1085,4 +1275,124 @@ void pk_nds_field_keep_start_menu(const PkNdsFieldGame* g, uint32_t (*read32)(ui
     uint32_t task = read32(fs + g->offTask);
     if (!inMainRam(task) || read32(task + 4) != t->startMenuTask) return;
     if (read32(fs + t->offMenuInputState) != 0) write32(fs + t->offMenuInputState, 0);
+}
+
+// EXPAND's margins in HeartGold / SoulSilver and Platinum. The field keeps the 4 map chunks round the player loaded and draws every
+// one's props (lamps, signs, buildings: map_prop_manager.c's ov01_021F3A3C) from the *current* area's models
+// (AreaDataManager, loaded per map header's areaDataBank). A chunk of another area - Saffron seen from Route 8, the gate
+// between them - had each prop whose model this area didn't load turned into model 0 (MapPropManager_LoadFromNARC), a
+// red and purple box. The screen never reaches those (the gate house itself, a model both areas load, is drawn right),
+// but EXPAND's wider box test lets the game draw them (a player's report). So for the frame, the model-0 props of a chunk
+// in another area are marked culled, as the game marks a prop it hides (MapProp.culled), and put back after it.
+// FieldSystem: location 0x20, mapLoadManager 0x2C, mapMatrix 0x30 (field_system.h). MapLoadManager: the 4 loaded maps'
+// pointers at 0x90, each with its matrix cell at 0x860 (-1 = none) and its MapPropManager at 0x868
+// (MapLoadManager_RenderLoadedMaps, ov01_021F630C); MapPropManager: 32 MapProps of 0x38 bytes, buildModel at 0, active
+// at 4, culled at 8. MapMatrix: matrix_id u8 at 2, the cells' map headers (u16) at 6. sMapHeaders: 24-byte MapHeaders,
+// areaDataBank at +1, matrixId at +4 - found once by its first three entries (EVERYWHERE and NOTHING: area 0, move models
+// 15, one matrix; UNION: area 26; German HeartGold's at 0x020F6B94) and checked against the current map's matrix every
+// frame. Platinum is the same with its own offsets (PLATINUM_PROPS; MapPropManager_Load sets modelID 0, MapProp.hidden
+// skips one in MapPropManager_Render). (The ground's materials whose textures this area lacks are pk_nds_wide.cpp's
+// unboundTexture.)
+namespace {
+constexpr int MAX_HIDDEN = 4 * 32;
+struct ForeignProps {
+    const PkNdsFieldGame* game = nullptr;
+    uint32_t headers = 0;         // sMapHeaders, 0 = not found
+    bool searched = false;
+    uint32_t hidden[MAX_HIDDEN];  // the culled words set this frame
+    int numHidden = 0;
+};
+ForeignProps foreign;
+
+// One game's structures for it (see above; Platinum's from pret/pokeplatinum: field_system.h, land_data.c, map_prop.h,
+// map_header.h).
+struct PropLayout {
+    int offLoadManager, offMatrix;   // FieldSystem's MapLoadManager (Platinum: LandDataManager) and MapMatrix
+    int offLoadedMaps;               // ... its 4 LoadedMap pointers
+    int propStride;                  // MapProp: model id at 0, loaded / active at 4, hidden / culled at 8
+    int headerArea, headerMatrix;    // MapHeader: the area data's byte, the matrix id's (a u8 / the low byte of a u16)
+};
+// HeartGold / SoulSilver
+constexpr PropLayout HGSS_PROPS = {0x2C, 0x30, 0x90, 0x38, 1, 4};
+// Platinum: FieldSystem.landDataMan 0x28, .mapMatrix 0x2C; LandDataManager.loadedMaps 0x88 (after loadedMapBufs, two
+// MapLazyLoaderManagers of 0x2C, the pending loads' 0x1C and the 4 cancel flags); MapProp 0x8C (an NNSG3dRenderObj, the
+// model, position / rotation / scale after the 4 words); MapHeader.areaDataArchiveID at 0, mapMatrixID at 2.
+constexpr PropLayout PLATINUM_PROPS = {0x28, 0x2C, 0x88, 0x8C, 0, 2};
+
+uint32_t findMapHeaders(uint32_t (*read32)(uint32_t), bool platinum)
+{
+    auto byte = [&](uint32_t a) { return (read32(a & ~3u) >> ((a & 3) * 8)) & 0xFF; };
+    auto half = [&](uint32_t a) { return (read32(a & ~3u) >> ((a & 2) * 8)) & 0xFFFF; };
+    for (uint32_t a = 0x02000000u; a < 0x02180000u; a += 4) {
+        uint32_t w0 = read32(a);
+        if (platinum) {
+            // EVERYWHERE, NOTHING (area 0), UNDERGROUND (2), JUBILIFE_CITY (6, the main matrix), its MART (22)
+            if ((w0 & 0xFFFF00FF) != 0 || byte(a + 24) != 0 || byte(a + 48) != 2 || byte(a + 72) != 6 ||
+                half(a + 74) != 0 || byte(a + 96) != 22 || half(a + 98) == 0)
+                continue;
+            return a;
+        }
+        // entry 0: area 0, move model bank 15 (the u16 after it, low 4 bits)
+        if (((w0 >> 8) & 0xFF) != 0 || ((w0 >> 16) & 0xF) != 15) continue;
+        if (byte(a + 25) != 0 || (half(a + 26) & 0xF) != 15 || half(a + 28) != half(a + 4)) continue;
+        if (byte(a + 49) != 26) continue;
+        return a;
+    }
+    return 0;
+}
+} // namespace
+
+void pk_nds_field_foreign_props(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t), void (*write32)(uint32_t, uint32_t),
+                                int hide)
+{
+    if (!hide) {
+        // Put back only what is still that prop (model 0, in use, hidden by us): a frame that freed the chunk and gave its
+        // block to something else must not get a word zeroed.
+        for (int i = 0; i < foreign.numHidden; i++) {
+            uint32_t p = foreign.hidden[i];
+            if (read32(p) == 0 && read32(p + 4) && read32(p + 8) == 1) write32(p + 8, 0);
+        }
+        foreign.numHidden = 0;
+        return;
+    }
+    if (!g || !write32 || g->gen != 0) return;  // Gen 4's field: HeartGold / SoulSilver, Platinum
+    const bool platinum = !g->rateBytes;
+    const PropLayout& L = platinum ? PLATINUM_PROPS : HGSS_PROPS;
+    if (foreign.game != g) {
+        foreign = ForeignProps();
+        foreign.game = g;
+    }
+    uint32_t fs = read32(g->fieldSystemPtr);
+    if (!inMainRam(fs)) return;
+    uint32_t loc = read32(fs + g->offLocation), mlm = read32(fs + L.offLoadManager), mm = read32(fs + L.offMatrix);
+    if (!inMainRam(loc) || !inMainRam(mlm) || !inMainRam(mm)) return;
+    if (!foreign.searched) {
+        foreign.searched = true;
+        foreign.headers = findMapHeaders(read32, platinum);
+    }
+    if (!foreign.headers) return;
+    auto byte = [&](uint32_t a) { return (read32(a & ~3u) >> ((a & 3) * 8)) & 0xFF; };
+    uint32_t mapId = read32(loc);
+    if (mapId > 2000) return;
+    uint32_t here = foreign.headers + mapId * 24;
+    if (byte(here + L.headerMatrix) != ((read32(mm) >> 16) & 0xFF)) return;  // not this map's matrix
+    uint32_t area = byte(here + L.headerArea);
+    uint32_t cells = (read32(mm) & 0xFF) * ((read32(mm) >> 8) & 0xFF);
+    for (int i = 0; i < 4; i++) {
+        uint32_t lm = read32(mlm + L.offLoadedMaps + i * 4);
+        if (!inMainRam(lm)) continue;
+        uint32_t cell = read32(lm + 0x860), pm = read32(lm + 0x868);
+        if (cell >= cells || !inMainRam(pm)) continue;
+        uint32_t h = mm + 6 + cell * 2;
+        uint32_t header = (read32(h & ~3u) >> ((h & 2) * 8)) & 0xFFFF;
+        if (header == 0 || header > 2000) continue;  // no map there (MAP_EVERYWHERE)
+        if (byte(foreign.headers + header * 24 + L.headerArea) == area) continue;
+        for (int j = 0; j < 32 && foreign.numHidden < MAX_HIDDEN; j++) {
+            uint32_t p = pm + j * L.propStride;
+            if (read32(p) == 0 && read32(p + 4) && read32(p + 8) == 0) {
+                write32(p + 8, 1);
+                foreign.hidden[foreign.numHidden++] = p;
+            }
+        }
+    }
 }

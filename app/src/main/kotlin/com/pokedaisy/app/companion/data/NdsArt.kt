@@ -135,6 +135,7 @@ object NdsArt {
         OriginHeartGold.data = null
         RenegadePlatinum.data = null
         HeartfeltGold.data = null
+        SacredGold.data = null
         Black2Redux.data = null
         background("pokedaisy-nds-art") {
             // The names first (a few text banks): the companion's first samples use them.
@@ -145,6 +146,8 @@ object NdsArt {
                 .onFailure { Logs.w("NdsArt: Renegade Platinum's tables failed", it) }
             runCatching { HeartfeltGold.data = if (HeartfeltGold.matches(rom)) readHeartfelt(rom) else null }
                 .onFailure { Logs.w("NdsArt: Heartfelt Gold's tables failed", it) }
+            runCatching { SacredGold.data = if (SacredGold.matches(rom)) readSacredGold(rom) else null }
+                .onFailure { Logs.w("NdsArt: Sacred Gold / Storm Silver's tables failed", it) }
             runCatching { Black2Redux.data = if (Black2Redux.matches(rom)) readRedux(rom) else null }
                 .onFailure { Logs.w("NdsArt: the Redux hacks' tables failed", it) }
             names?.let { n ->
@@ -158,6 +161,74 @@ object NdsArt {
                 dir = RomArt.dir(filesDir)
                 if (extractTo(rom, RomArt.dir(filesDir))) RomArt.announce()
             }.onFailure { Logs.w("NdsArt: failed", it) }
+        }
+    }
+
+    /**
+     * A DS cart's party icons for the save tools (SAVE EDITOR, TRADE, COLLECTION, PAL PARK, POKé TRANSFER), decoded one
+     * at a time from the cart's own icon archive - nothing written, nothing bundled, the game needn't have been played.
+     * The same archives, palettes and egg as [extractTo]: HeartGold / SoulSilver, Platinum (Renegade's palettes),
+     * Diamond / Pearl (Platinum's palette table: its first 495 entries are theirs), Black / White and their sequels
+     * (Redux's palettes). Null for any other cart, and for Origin HeartGold / Heartfelt Gold, whose species ids are their own.
+     */
+    fun monIcons(rom: Path): MonIcons? = withRomFile(rom) { f ->
+        val header = f.read(0, 0x200)
+        val code = asciiString(header, 0x0C, 4)
+        val rev = header[0x1E].toInt() and 0xFF
+        val read: (Long, Int) -> ByteArray? = { off, len -> f.read(off, len) }
+        if (OriginHeartGold.matches(read)) return@withRomFile null
+        val platinum = isPlatinum(code, rev)
+        val heartGold = isHgss(code, rev)
+        val diamondPearl = isDiamondPearl(code)
+        val white = (code == "IRAO" || code == "IRAF") && rev == 0 || portIs(code, rev, GameKind.WHITE)
+        val black = (code == "IRBO" || code == "IRBF") && rev == 0 || portIs(code, rev, GameKind.BLACK) || white
+        val white2 = code == "IRDO" && rev == 0 || portIs(code, rev, GameKind.WHITE2)
+        val black2 = code == "IREO" && rev == 0 || portIs(code, rev, GameKind.BLACK2) || white2
+        if (heartGold && HeartfeltGold.matches(read)) return@withRomFile null
+        when {
+            black || black2 -> {
+                val files = if (black2 && Black2Redux.matches(read)) reduxFiles(f, code == Black2Redux.CODE_WHITE2) ?: return@withRomFile null
+                    else if (black2) GEN5_BLACK2_FILES else if (white) GEN5_WHITE_FILES else GEN5_BLACK_FILES
+                val narc = Narc(file(f, header, "/a/0/0/7") ?: return@withRomFile null)
+                MonIcons(narc::member, palettes(narc.member(0)), files.iconPalettes, files.iconBase, 2, BLACK_EGG)
+            }
+            platinum || heartGold || diamondPearl -> {
+                val path = when {
+                    platinum -> "/poketool/icongra/pl_poke_icon.narc"
+                    diamondPearl -> "/poketool/icongra/poke_icon.narc"
+                    else -> "/a/0/2/0"
+                }
+                val iconPalettes = when {
+                    platinum && RenegadePlatinum.matches(read) ->
+                        f.read(RenegadePlatinum.ICON_PALETTES_OFFSET, RenegadePlatinum.ICON_PALETTES_SIZE)
+                    platinum || diamondPearl -> iconPalettesPlatinum
+                    else -> iconPalettesHeartGold
+                }
+                val narc = Narc(file(f, header, path) ?: return@withRomFile null)
+                MonIcons(narc::member, palettes(narc.member(0)), iconPalettes, 7, 1, EGG)
+            }
+            else -> null
+        }
+    }
+
+    /** [monIcons]' reader: icon n is archive member [base] + [step] x n in palette [palIdx][n]; the egg is icon [egg]
+     * (Gen 5's odd members between are the female icons). */
+    class MonIcons internal constructor(
+        private val member: (Int) -> ByteArray?, private val palettes: List<IntArray>, private val palIdx: ByteArray,
+        private val base: Int, private val step: Int, private val egg: Int,
+    ) {
+        private val cache = LockedMap<Int, RomArt.Image>()
+        private val missing = LockedMap<Int, Unit>()
+
+        /** [species]' icon (national dex number; 32 x 64, both frames), or the egg's; null if the cart has none. */
+        fun get(species: Int, isEgg: Boolean = false): RomArt.Image? {
+            val n = if (isEgg) egg else species
+            if (n !in 1..egg || n in missing) return null
+            cache[n]?.let { return it }
+            val pal = palettes.getOrNull(palIdx.getOrNull(n)?.toInt() ?: 0)
+            val img = pal?.let { icon(member(base + step * n), it) }
+            if (img == null) missing[n] = Unit else cache[n] = img
+            return img
         }
     }
 
@@ -449,6 +520,46 @@ object NdsArt {
     }
 
     /**
+     * Sacred Gold / Storm Silver's tables from their cart ([SacredGold.Data]): each species' types (HeartGold's 44-byte personal
+     * records, types at 6 and 7), each move's category, power and type (`/a/0/1/1`) under the cart's move names, and each map's
+     * walking and surfing rates (the map headers in the unpacked ARM9, their encounter bank into the game's encounter archive).
+     */
+    fun readSacredGold(rom: Path): SacredGold.Data? = withRomFile(rom) { f ->
+        val header = f.read(0, 0x200)
+        val personal = Narc(file(f, header, "/a/0/0/2") ?: return null)
+        val types = HashMap<Int, SpeciesTypes>()
+        for (id in 1 until personal.size) {
+            val p = personal.member(id) ?: continue
+            if (p.size >= 8) types[id] = SpeciesTypes(u8(p, 6), u8(p, 7))
+        }
+        val moveNames = readNames(rom)?.moves.orEmpty()
+        val moveRecords = Narc(file(f, header, "/a/0/1/1") ?: return null)
+        val moves = HashMap<Int, MoveInfo>()
+        val categories = HashMap<Int, Int>()
+        for (id in 1 until moveRecords.size) {
+            val m = moveRecords.member(id) ?: continue
+            if (m.size < 5) continue
+            val name = moveNames.getOrNull(id)?.takeIf { it.isNotBlank() && !it.startsWith("MOVE_") } ?: continue
+            moves[id] = MoveInfo(name, u8(m, 4), u8(m, 3))
+            categories[id] = u8(m, 2)
+        }
+        val rates = ArrayList<Int>()
+        val arm9 = Gen5Lz.arm9(f, header)
+        val soulSilver = asciiString(header, 0x0C, 4) == SacredGold.CODE_STORM_SILVER
+        val encounters = file(f, header, if (soulSilver) SacredGold.ENCOUNTERS_SS else SacredGold.ENCOUNTERS_HG)?.let { Narc(it) }
+        val headers = arm9?.bytes?.let { b ->
+            val o = SacredGold.MAP_HEADERS_ARM9
+            if (o + SacredGold.MAP_HEADER_COUNT * 24 <= b.size) b.copyOfRange(o, o + SacredGold.MAP_HEADER_COUNT * 24) else null
+        }
+        if (headers != null && encounters != null) for (map in 0 until SacredGold.MAP_HEADER_COUNT) {
+            val bank = u8(headers, map * 24)
+            val e = if (bank == 0xFF) null else encounters.member(bank)
+            if (e != null && e.size >= 2) rates += listOf(map, u8(e, 0), u8(e, 1))
+        }
+        SacredGold.Data(types, moves, categories, rates.toIntArray())
+    }
+
+    /**
      * Origin HeartGold's DEX ([ORIGIN_DEX], [Gen4Dex]'s columns): HeartGold's archives grown to the National Dex's 1025 -
      * the text's banks renumbered (791 descriptions, 803 categories, 711 abilities), heights / weights in `/a/0/7/4`
      * (members 0 / 1), its 52-byte personal records (abilities u16 at 0x16 / 0x18, a hidden one at 0x1A), evolutions of up
@@ -537,8 +648,9 @@ object NdsArt {
 
     /**
      * Origin HeartGold's tables from its cart ([OriginHeartGold.Data]): each species / form's types (its 52-byte personal
-     * records, `/a/0/0/2`, types at 6 and 7 as HeartGold's), each move's type and power (its own `/extra/new_move_data.narc`,
-     * 40 bytes a move: type 0, category 2, power 3) under the cart's move names, the type chart, the forms and the machines.
+     * records, `/a/0/0/2`, types at 6 and 7 as HeartGold's), each move's type, category and power (its own
+     * `/extra/new_move_data.narc`, 40 bytes a move: type 0, category 2, power 3) under the cart's move names, the type chart,
+     * the forms and the machines.
      */
     fun readOrigin(rom: Path): OriginHeartGold.Data? = withRomFile(rom) { f ->
         val header = f.read(0, 0x200)
@@ -551,10 +663,14 @@ object NdsArt {
         val moveNames = readNames(rom)?.moves.orEmpty()
         val moveRecords = Narc(file(f, header, "/extra/new_move_data.narc") ?: return null)
         val moves = HashMap<Int, MoveInfo>()
+        val categories = HashMap<Int, Int>()
         for (id in 1 until moveRecords.size) {
             val m = moveRecords.member(id) ?: continue
             val name = moveNames.getOrNull(id)?.takeIf { it.isNotBlank() } ?: continue
-            if (m.size >= 4) moves[id] = MoveInfo(name, u8(m, 0), u8(m, 3))
+            if (m.size < 4) continue
+            moves[id] = MoveInfo(name, u8(m, 0), u8(m, 3))
+            // Gen 5's order (0 status, 1 physical, 2 special), unlike HeartGold's own records.
+            categories[id] = when (u8(m, 2)) { 1 -> 0; 2 -> 1; else -> 2 }
         }
         val chart = HashMap<Int, Int>()
         val c = f.read(OriginHeartGold.TYPE_CHART_OFFSET, 18 * 18)
@@ -581,7 +697,7 @@ object NdsArt {
             val e = if (bank == 0xFF) null else encounters?.member(bank)
             if (e != null && e.size >= 2) rates += listOf(map, u8(e, 0), u8(e, 1))
         }
-        OriginHeartGold.Data(types, moves, chart, forms, machines, rates.toIntArray())
+        OriginHeartGold.Data(types, moves, categories, chart, forms, machines, rates.toIntArray())
     }
 
     /**

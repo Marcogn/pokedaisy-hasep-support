@@ -1,7 +1,9 @@
 # Builds website/ and deploys it to Firebase Hosting (project pokedaisy). The live site only changes with
 # an app release: a published release (not a pre-release) deploys that release's tag, so the game table and
-# ROM check never get ahead of the APK people can download. Pushes to main and pull requests only build and
-# test. Run it by hand with a release tag to redeploy (or roll back to) that release's site.
+# ROM check never get ahead of the APK people can download. A published pre-release (a beta, an rc) deploys the
+# newest release's tag again: its build reads the beta's games from GitHub and lists them tagged BETA, with how to
+# get it (src/lib/betaRelease.js). Pushes to main and pull requests only build and test. Run it by hand with a
+# release tag to redeploy (or roll back to) that release's site.
 # The Firebase secret lives in the `website` environment, which only runs on v* tags (which only the owner can
 # push, docs/RELEASING.md): a branch pushed by a collaborator can't reach it, so there are no PR previews.
 name: Website
@@ -12,10 +14,11 @@ on:
     paths: ['website/**', 'docs/manual/**', '.github/workflows/website.yml']
   pull_request:
     paths: ['website/**', 'docs/manual/**', '.github/workflows/website.yml']
-  # "released": published as a full release, or a pre-release promoted to one. The home and releases
-  # pages list GitHub releases, read at build time.
+  # "released": published as a full release, or a pre-release promoted to one. "prereleased": a beta or rc
+  # published, whose games the site then lists as BETA. The home and releases pages list GitHub releases, read at
+  # build time.
   release:
-    types: [released]
+    types: [released, prereleased]
   workflow_dispatch:
     inputs:
       tag:
@@ -32,7 +35,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which tag's website/ to build: a release's own, a manual run's, the newest release's for a pre-release; none
+  # (the pushed commit) for a push or a pull request.
+  ref:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      deploy: ${{ steps.pick.outputs.deploy }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          deploy=true
+          case "$EVENT" in
+            workflow_dispatch) tag="$INPUT_TAG" ;;
+            release) if [ "$PRERELEASE" = true ]; then
+                tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+                # A release whose site can't list a beta's games would only redeploy itself as it was: leave the
+                # live site alone (it may have been deployed by hand since).
+                gh api "repos/$GITHUB_REPOSITORY/contents/website/src/lib/betaRelease.js?ref=$tag" --silent || deploy=false
+              else tag="$RELEASE_TAG"; fi ;;
+            *) tag="" ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: ref
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -40,8 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          # A release builds its own tag (the default ref); a manual run, the tag it was given.
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || '' }}
+          ref: ${{ needs.ref.outputs.tag && format('refs/tags/{0}', needs.ref.outputs.tag) || '' }}
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version-file: website/.nvmrc
@@ -53,10 +86,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Live: releases and manual runs only, once the build above has passed its tests.
+  # Live: releases, pre-releases (see `ref`) and manual runs only, once the build above has passed its tests.
   deploy:
-    needs: build
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    needs: [ref, build]
+    if: (github.event_name == 'release' || github.event_name == 'workflow_dispatch') && needs.ref.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     environment: website
     permissions:
@@ -68,7 +101,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || '' }}
+          ref: ${{ needs.ref.outputs.tag && format('refs/tags/{0}', needs.ref.outputs.tag) || '' }}
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version-file: website/.nvmrc

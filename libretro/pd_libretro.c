@@ -18,12 +18,15 @@
 #include "pd_binput.h"
 #include "polished_action_data.h"
 #include "hud.h"
+#include "pd_env.h"
 #include "pd_guide.h"
+#include "pd_tr.h"
 #include "pk_call.h"
 #include "pk_flight.h"
 #include "pd_flight_gen.h"
 #include "pk_wide.h"
 #include "quick_menu.h"
+#include "pd_env.h"
 #include "wild.h"
 #include "pd_dex.h"
 #include "pd_font.h"
@@ -38,6 +41,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include "pd_fs.h"
 
 bool pd_lr_read_memory(void *ctx, uint32_t a, void *out, size_t n);
 
@@ -50,12 +54,14 @@ static const unsigned retroId[NKEYS] = {
     RETRO_DEVICE_ID_JOYPAD_L2,    RETRO_DEVICE_ID_JOYPAD_R2,   RETRO_DEVICE_ID_JOYPAD_SELECT, RETRO_DEVICE_ID_JOYPAD_L3};
 
 /* ---- the options this layer adds to mGBA's ---- */
-#define PD_OPTION_COUNT 2
+#define PD_OPTION_COUNT 3
 static const struct retro_core_option_v2_definition pdOptions[PD_OPTION_COUNT] = {
     {"pokedaisy_canvas", "Companion canvas", NULL, "The frame size the core reports: the game sits in it at a whole scale, the companion fills it. auto = 320x240.", NULL, NULL,
      {{"auto", NULL}, {"320x240", NULL}, {"341x256", NULL}, {"400x300", NULL}, {"427x240", NULL}, {NULL, NULL}}, "auto"},
-    {"pokedaisy_panel", "Panel size", NULL, "The frontend's screen. With it the core picks its own canvas: EXPAND at the game's whole scale, ZOOM OUT one scale less. auto = the canvas option alone.", NULL, NULL,
+    {"pokedaisy_panel", "Panel size", NULL, "The frontend's screen. With it the core picks its own canvas: EXPAND at the game's whole scale, each ZOOM step one whole scale further out. auto = the canvas option alone.", NULL, NULL,
      {{"auto", NULL}, {"480x320", NULL}, {"480x800", NULL}, {"640x480", NULL}, {"720x480", NULL}, {"720x540", NULL}, {"720x720", NULL}, {"752x560", NULL}, {"960x544", NULL}, {"960x720", NULL}, {"1024x768", NULL}, {"1280x720", NULL}, {"1600x1440", NULL}, {"1920x1080", NULL}, {NULL, NULL}}, "auto"},
+    {"pokedaisy_aspect", "Aspect", NULL, "How the game fills the screen where the host can draw past the game's edges: expand (the app's EXPAND, the map rebuilt out to the edges at the game's own scale), zoom (one scale less, more of the map), original (the game's own frame), auto (the core's own ASPECT setting).", NULL, NULL,
+     {{"auto", NULL}, {"expand", NULL}, {"zoom", NULL}, {"original", NULL}, {NULL, NULL}}, "auto"},
 };
 
 static retro_environment_t realEnv;
@@ -210,10 +216,89 @@ static unsigned gameW, gameH;
 
 static char message[128];
 static int messageFrames;
+static char pdStateRoot[1050] = "."; // the save folder's parent: the host's states/<ROM>.ss
+static char pdGamePath[1050];
+static bool quickFf;
+// PokeDaisy's own host (it answers PD_ENV_SET_FAST_FORWARD): the quick menu's SAVE STATE / LOAD STATE / FF are its
+// (its states/ folder, its speed). RetroArch and other frontends keep their own and don't get the tiles.
+static bool pdHost;
+RETRO_API size_t retro_serialize_size(void);
+RETRO_API bool retro_serialize(void *data, size_t size);
+RETRO_API bool retro_unserialize(const void *data, size_t size);
+RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info);
 static void notice(const char *s) {
   snprintf(message, sizeof message, "%s", s);
   messageFrames = 90;
   fprintf(stderr, "pokedaisy: %s\n", s);
+}
+
+/* The quick menu's state slot: the same states/<ROM>.ss (the GBA core .armgba.ss) the host's SAVE / LOAD hotkeys use. */
+static bool quick_state_path(char *out, size_t n) {
+  if (!pdGamePath[0])
+    return false;
+  const char *slash = strrchr(pdGamePath, '/');
+  const char *backslash = strrchr(pdGamePath, '\\');
+  if (backslash && (!slash || backslash > slash))
+    slash = backslash;
+  const char *base = slash ? slash + 1 : pdGamePath;
+#ifdef PD_ARMGBA
+  const char *suffix = ".armgba";
+#else
+  const char *suffix = "";
+#endif
+  snprintf(out, n, "%s/states/%s%s.ss", pdStateRoot[0] ? pdStateRoot : ".", base, suffix);
+  return true;
+}
+static bool quick_state_exists(void) {
+  char path[2200];
+  if (!quick_state_path(path, sizeof path))
+    return false;
+  FILE *f = fopen(path, "rb");
+  if (!f)
+    return false;
+  fclose(f);
+  return true;
+}
+static bool quick_state_save(void) {
+  char path[2200];
+  size_t n = quick_state_path(path, sizeof path) ? retro_serialize_size() : 0;
+  void *data = n ? malloc(n) : NULL;
+  bool ok = data && retro_serialize(data, n);
+  if (ok) {
+    FILE *f = fopen(path, "wb");
+    ok = f && fwrite(data, 1, n, f) == n;
+    if (f)
+      fclose(f);
+  }
+  free(data);
+  return ok;
+}
+static bool quick_state_load(void) {
+  char path[2200];
+  if (!quick_state_path(path, sizeof path))
+    return false;
+  FILE *f = fopen(path, "rb");
+  if (!f)
+    return false;
+  fseek(f, 0, SEEK_END);
+  const long size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  void *data = size > 0 ? malloc((size_t)size) : NULL;
+  bool ok = data && fread(data, 1, (size_t)size, f) == (size_t)size;
+  fclose(f);
+  if (ok)
+    ok = retro_unserialize(data, (size_t)size);
+  free(data);
+  return ok;
+}
+
+/* The quick menu's FF tile: the host owns the speed, so ask it to toggle. False when the frontend doesn't know the
+ * command (RetroArch and others): the tile says so instead of looking on while nothing changes. */
+static bool quick_ff_set(bool on) {
+  if (!realEnv || !realEnv(PD_ENV_SET_FAST_FORWARD, &on))
+    return false;
+  quickFf = on;
+  return true;
 }
 
 static inline uint32_t from565(uint16_t p) {
@@ -319,7 +404,8 @@ static void draw_game(void) {
   if (!outputBuffer || !gameW || !gameH)
     return;
   if (wideReady) {
-    int ws = game_scale(wideW, wideH);
+    // The wide view is the canvas's own pixels (wide_window): 1:1, never scaled back up to fill a ZOOM canvas.
+    const int ws = 1;
     int wx = (CW - (int)wideW * ws) / 2, wy = (CH - (int)wideH * ws) / 2;
     for (unsigned y = 0; y < wideH; y++)
       for (int k = 0; k < ws; k++) {
@@ -380,7 +466,7 @@ static void draw_game_fast(void) {
   if (!outputBuffer || !gameW || !gameH)
     return;
   if (wideReady) {
-    int ws = game_scale(wideW, wideH);
+    const int ws = 1; // wide_window's pixels: 1:1 (ZOOM's canvas is shown smaller by the frontend)
     int wx = (CW - (int)wideW * ws) / 2, wy = (CH - (int)wideH * ws) / 2;
     for (unsigned y = 0; y < wideH; y++) {
       int cy = wy + (int)y * ws;
@@ -484,10 +570,9 @@ static void area_taps(struct area_tap *t, int n, int src) {
     t[d].n = k;
   }
 }
-/* The quick menu drawn at w x h laid over the whole canvas, each canvas pixel the area-weighted average of the menu
- * pixels under it (alpha-weighted, so the menu's see-through parts don't darken its edges). Unlike nearest-neighbour
- * at 1.5x it keeps the pixel font's strokes even, softened instead of alternately one and two pixels wide. */
-static void blend_overlay_area(const uint32_t *px, int w, int h, uint32_t *scratch) {
+/* The overlay's own pixels spread over the whole canvas (an area-weighted resample, alpha kept), for a ZOOM step's
+ * HUD: unlike nearest-neighbour at 1.5x it keeps the pixel font's strokes even. */
+static void spread_overlay(const uint32_t *px, int w, int h, uint32_t *out) {
   static struct area_tap tx[CANVAS_MAX_W], ty[CANVAS_MAX_H];
   area_taps(tx, CW, w);
   area_taps(ty, CH, h);
@@ -495,9 +580,9 @@ static void blend_overlay_area(const uint32_t *px, int w, int h, uint32_t *scrat
     for (int x = 0; x < CW; x++) {
       uint32_t aw = 0, r = 0, g = 0, b = 0;
       for (int ky = 0; ky < ty[y].n; ky++) {
-        const uint32_t *row = px + (size_t)ty[y].i[ky] * w;
+        const uint32_t *row = px + (size_t) ty[y].i[ky] * w;
         for (int kx = 0; kx < tx[x].n; kx++) {
-          const uint32_t p = row[tx[x].i[kx]], wa = (p >> 24) * (uint32_t)(ty[y].w[ky] * tx[x].w[kx]);
+          const uint32_t p = row[tx[x].i[kx]], wa = (p >> 24) * (uint32_t) (ty[y].w[ky] * tx[x].w[kx]);
           aw += wa;
           r += (p >> 16 & 255) * (wa >> 8);
           g += (p >> 8 & 255) * (wa >> 8);
@@ -505,8 +590,14 @@ static void blend_overlay_area(const uint32_t *px, int w, int h, uint32_t *scrat
         }
       }
       const uint32_t a = aw >> 16, d = aw >> 8; // alpha out of 255; the colours' common weight
-      scratch[(size_t)y * CW + x] = a && d ? a << 24 | (r / d) << 16 | (g / d) << 8 | (b / d) : 0;
+      out[(size_t) y * CW + x] = a && d ? a << 24 | (r / d) << 16 | (g / d) << 8 | (b / d) : 0;
     }
+}
+/* The quick menu drawn at w x h laid over the whole canvas, each canvas pixel the area-weighted average of the menu
+ * pixels under it (alpha-weighted, so the menu's see-through parts don't darken its edges). Unlike nearest-neighbour
+ * at 1.5x it keeps the pixel font's strokes even, softened instead of alternately one and two pixels wide. */
+static void blend_overlay_area(const uint32_t *px, int w, int h, uint32_t *scratch) {
+  spread_overlay(px, w, h, scratch);
   blend_overlay(scratch, CW, CH, 1, 0, 0);
 }
 
@@ -538,10 +629,10 @@ static void present(void) {
 /* ---- input ---- */
 static unsigned held, prevHeld, pressedKeys;
 static int heldFrames[NKEYS];
-static int quickBtn = Y, companionBtn = X, hudBtn = -1; // key indices, -1 none (from settings: key_of)
+static int quickBtn = L3, companionBtn = X, hudBtn = -1; // key indices, -1 none (from settings: key_of)
 static unsigned gameKeys; // keys the layer presses for the game (BIKE's SELECT)
 static int gameKeyFrames;
-static int hudOx, hudOy, hudScale = 1; // where draw_hud last put the HUD on the canvas (hud_hit_at)
+static int hudOx, hudOy, hudTW, hudTH, hudScale = 1, hudPct = 100; // where draw_hud last put the HUD (hud_hit_at)
 static unsigned shortcutKeys, shortcutBlocked;
 static bool shortcutExclusive;
 static bool maskGame;     // while an overlay is up the game sees no keys
@@ -552,9 +643,11 @@ static unsigned autoRunFlip;
 /* The pad buttons for the quick menu, the companion and the HUD cursor are PokeDaisy's own SETTINGS rows
  * (a core option is out of reach in plorpOS): each frame's key index, -1 for none. */
 static int key_of(int btn) {
-  return btn == PD_BTN_X ? X : btn == PD_BTN_Y ? Y : btn == PD_BTN_L2 ? L2 : btn == PD_BTN_R2 ? R2 : -1;
+  return btn == PD_BTN_X ? X : btn == PD_BTN_Y ? Y : btn == PD_BTN_L2 ? L2 : btn == PD_BTN_R2 ? R2 : btn == PD_BTN_L3 ? L3 : -1;
 }
-static void read_options(void) {} // (kept for the option-update hook: the canvas is read once at load)
+static void apply_aspect_option(void);
+/* Asked again whenever the frontend says an option changed, and once after the settings file is read. */
+static void read_options(void) { apply_aspect_option(); }
 
 static void poll_keys(void) {
   held = 0;
@@ -581,6 +674,11 @@ static void poll_keys(void) {
   prevHeld = held;
 }
 static bool down(int k) { return k >= 0 && (pressedKeys >> k & 1) != 0; }
+// L3 is the app's default. Y stays a quick-menu key on a keyboard, where F is Y and there is no L3.
+// Y stands in for L3 (devices without stick clicks) only while no other action has Y: else one press did both.
+static bool quick_key(void) {
+  return down(quickBtn) || (quickBtn == L3 && companionBtn != Y && hudBtn != Y && down(Y));
+}
 
 /* What mGBA reads while its frame runs. */
 static int16_t masked_input(unsigned port, unsigned device, unsigned index, unsigned id) {
@@ -611,6 +709,7 @@ static struct pd_snapshot snap;
 static struct pd_host_info host;
 static char settingsPath[1100];
 static char pdDir[1050]; // <save dir>/pokedaisy: settings.ini and FLIGHT AREA's seen maps ("" = none)
+
 static bool companion, companionWas, haveGame;
 static int frames;
 
@@ -618,6 +717,10 @@ static int frames;
 static struct hud_state hudState = {.wild = -1, .focus = -1};
 static struct hud_hits hudHits;
 static bool hudFocus, hudShown;
+/* The frontend draws the field HUD itself (PD_ENV_SET_HUD): a ZOOM step's canvas is scaled to the window, and a HUD
+ * blended into it would be resampled with the picture, soft at 1x and sharp only at 2x. */
+static bool hudHost, hudNativeOn;
+static int hudNativePct; // SIZE the picture goes over the box for: 100 the whole box, 50 its four corners
 static uint32_t *hudPixels;
 static uint32_t hudDrawnKey;
 static int hudW, hudH;
@@ -776,22 +879,37 @@ static int hud_wild_uncaught(const struct pd_game *g, const struct pd_snapshot *
   return n ? left : -1;
 }
 
+static int want_canvas(void);
+static int want_zoom(void);
+static void canvas_for(int fw, int fh, int kind, int extra, int *w, int *h);
+
 /* The HUD over the game's own picture, a canvas pixel a game pixel: SIZE picks the mini HUD (SMALL, NORMAL) or the full
  * one (LARGE). */
 static void draw_hud(void) {
+  hudNativeOn = false;
   int gs = game_scale(gameW, gameH);
   int ax = (CW - (int)gameW * gs) / 2, ay = (CH - (int)gameH * gs) / 2, aw = (int)gameW * gs, ah = (int)gameH * gs;
+  bool base = false; // a ZOOM step: the HUD keeps the 1x picture's layout, so the frontend's smaller scale leaves it the same
   if (wideReady) { // the wide view (EXPAND, ZOOM OUT) is what is on screen: anchor to it, not to the centred game picture
-    int ws = game_scale(wideW, wideH);
+    const int ws = 1; // wide_window's pixels, as draw_game draws them
     aw = (int)wideW * ws;
     ah = (int)wideH * ws;
     ax = (CW - aw) / 2;
     ay = (CH - ah) / 2;
+    base = panelW && want_zoom() > 0 && !companion;
   }
   // SMALL / NORMAL: the mini HUD (a core's canvas is the game's own pixels, shown 3x to 6x); LARGE: the full one.
   hudState.mini = settings.hudSize != PD_HUD_LARGE;
   int scale = canvasScale;
   int w = aw / scale, hh = ah / scale;
+  if (base) { // the canvas at 1x, the HUD's layout at every step
+    int bw = 0, bh = 0;
+    const int kind = want_canvas();
+    canvas_for((int)gameW, (int)gameH, kind == CANVAS_MENU ? CANVAS_EXPAND : kind, 0, &bw, &bh);
+    if (bw > 0 && bh > 0)
+      w = bw, hh = bh;
+  }
+  const bool small = settings.hudSize != PD_HUD_LARGE; // SIZE's smaller HUD: half the pixels, at the canvas's corners
   if (!hudPixels)
     hudPixels = malloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H * sizeof *hudPixels);
   if (!hudPixels)
@@ -806,8 +924,26 @@ static void draw_hud(void) {
     hudW = w;
     hudH = hh;
   }
+  // A host that draws the HUD itself (PD_ENV_SET_HUD: the Linux / Windows host) gets it at the window's corners whatever
+  // the step, half size for SMALL and NORMAL. Any other frontend (RetroArch) keeps the HUD in the game's picture, as
+  // before ZOOM.
+  if (scale == 1 && hudHost) {
+    hudOx = hudOy = 0;
+    hudTW = CW;
+    hudTH = CH;
+    hudPct = small ? 50 : 100;
+    hudScale = 1;
+    // A frontend that draws it takes the picture at its own size instead: the same quarters, each drawn once to the
+    // window, so SMALL and NORMAL are as sharp at 1x as they are at 2x (the spread below halves them at 1x).
+    hudNativeOn = hudShown;
+    hudNativePct = hudPct;
+    return;
+  }
+  hudPct = 100;
   hudOx = ax + (aw - w * scale) / 2;
   hudOy = ay + (ah - hh * scale) / 2;
+  hudTW = w * scale;
+  hudTH = hh * scale;
   hudScale = scale;
   if (hudShown)
     blend_overlay(hudPixels, w, hh, scale, hudOx, hudOy);
@@ -817,17 +953,13 @@ static void draw_hud(void) {
 /* ---- game-code layer: EXPAND (pk_wide), the field read, WILD ENCOUNTERS ---- */
 
 
-/* The EXPAND window for the canvas and a fw x fh game: the canvas over the game's whole scale (one less for
- * ZOOM OUT), within pk_wide's largest view, never smaller than the game, even margins. */
-static void wide_window(int aspect, unsigned fw, unsigned fh, unsigned *w, unsigned *h) {
+/* The EXPAND window for the canvas and a fw x fh game: the canvas itself, in game pixels (pk_wide's largest view at
+ * most), never smaller than the game, even margins. The canvas is the panel over a whole scale (canvas_for), so the
+ * frontend shows it back at that scale: 1x the game's own pixels. ZOOM's steps grow this canvas (canvas_for), the game
+ * stays 1:1 in it and the frontend scales all of it down (draw_game), which is the map further out. */
+static void wide_window(unsigned fw, unsigned fh, unsigned *w, unsigned *h) {
   int width = CW / canvasScale, height = CH / canvasScale;
-  int sx = width / (int)fw, sy = height / (int)fh;
-  int scale = sx < sy ? sx : sy;
-  if (aspect == PD_ASPECT_ZOOM_OUT)
-    scale--;
-  if (scale < 1)
-    scale = 1;
-  unsigned x = (unsigned)width / scale, y = (unsigned)height / scale;
+  unsigned x = (unsigned)width, y = (unsigned)height;
   x = x > PK_WIDE_MAX_VIEW_W ? PK_WIDE_MAX_VIEW_W : x < fw ? fw : x;
   y = y > PK_WIDE_MAX_VIEW_H ? PK_WIDE_MAX_VIEW_H : y < fh ? fh : y;
   *w = x - ((x - fw) & 1);
@@ -837,10 +969,7 @@ static void wide_window(int aspect, unsigned fw, unsigned fh, unsigned *w, unsig
 static bool rewinding;   // the frontend is rewinding: the camera stays where the aspect put it (no AUTO ZOOM IN on the odd frames)
 /* The window for this frame, in the game frame's pixels (and wideW x wideH set). */
 static struct PkWideView wide_rect(unsigned fw, unsigned fh) {
-  int last = pk_wide_scene();
-  int aspect = settings.aspect == PD_ASPECT_ZOOM_OUT && settings.autoZoom && last != PK_WIDE_SCENE_FIELD && !rewinding
-                   ? PD_ASPECT_EXPAND : settings.aspect;
-  wide_window(aspect, fw, fh, &wideW, &wideH);
+  wide_window(fw, fh, &wideW, &wideH);
   return (struct PkWideView){((int)fw - (int)wideW) / 2, ((int)fh - (int)wideH) / 2, (int)wideW, (int)wideH};
 }
 
@@ -983,18 +1112,24 @@ static void wide_tick(void) {
   wideReady = !pk_wide_fault();
 }
 
-/* The canvas for a fw x fh game on the panel: the panel over the game's whole scale (one less for ZOOM OUT), so the
- * frontend shows it at exactly that integer scale. EXPAND's window is the whole canvas. */
-static void canvas_for(int fw, int fh, int kind, int *w, int *h) {
-  int s = panelW / fw < panelH / fh ? panelW / fw : panelH / fh;
+/* The canvas for a fw x fh game on the panel: the panel over the game's whole scale, one whole scale less per ZOOM step
+ * (and one for a kind that isn't EXPAND), so the frontend shows it at exactly that integer scale. EXPAND's window is the
+ * whole canvas. */
+static void canvas_for(int fw, int fh, int kind, int extra, int *w, int *h) {
+  int s;
+  if (kind == CANVAS_MENU) {
+    // The companion and its menus: the largest whole scale that still leaves them 320x240, the host menu's rule and
+    // about the size Android draws its companion at (a font pixel ~1/240-1/270 of the screen's height). Taking it
+    // from the game's scale less one drew a 640x480 screen's companion at 1x, everything half its size.
+    s = panelW / 320 < panelH / 240 ? panelW / 320 : panelH / 240;
+  } else {
+    s = panelW / fw < panelH / fh ? panelW / fw : panelH / fh;
+    if (kind != CANVAS_EXPAND && s > 1)
+      s--;
+    s -= extra; // ZOOM: each step shows one whole game scale more of the map
+  }
   if (s < 1)
     s = 1;
-  if (kind != CANVAS_EXPAND && s > 1)
-    s--;
-  // The companion and its menus are laid out for 320x240 at least: a Game Boy game's ZOOM OUT on a 1024x768 panel is
-  // 256x192, where text overran its boxes. Menus step down until the canvas holds them.
-  while (kind == CANVAS_MENU && s > 1 && (panelW / s < 320 || panelH / s < 240))
-    s--;
   int x = panelW / s, y = panelH / s;
   *w = x < fw ? fw : x > CANVAS_MAX_W ? CANVAS_MAX_W : x;
   *h = y < fh ? fh : y > CANVAS_MAX_H ? CANVAS_MAX_H : y;
@@ -1013,12 +1148,21 @@ static void choose_canvas(void) {
   baseGH = (int)av.geometry.base_height;
   panelW = panelH = 0;
   v = pd_option("pokedaisy_panel");
-  if (v && sscanf(v, "%dx%d", &panelW, &panelH) == 2 && panelW > 0 && panelH > 0)
-    canvas_for(baseGW, baseGH, CANVAS_MENU, &CWMAX, &CHMAX);
-  else
+  if (v && sscanf(v, "%dx%d", &panelW, &panelH) == 2 && panelW > 0 && panelH > 0) {
+    canvas_for(baseGW, baseGH, CANVAS_MENU, 0, &menuW, &menuH);
+    // The frontend makes its texture max_width x max_height once, so the maximum has to be the widest canvas a ZOOM step
+    // asks for (the panel over one game scale), not the companion's: the GB core drew nothing from the second step on.
+    const int mw = panelW < baseGW ? baseGW : panelW;
+    const int mh = panelH < baseGH ? baseGH : panelH;
+    CWMAX = mw > CANVAS_MAX_W ? CANVAS_MAX_W : mw;
+    CHMAX = mh > CANVAS_MAX_H ? CANVAS_MAX_H : mh;
+  } else {
     panelW = panelH = 0;
-  menuW = CW = CWMAX;
-  menuH = CH = CHMAX;
+    menuW = CWMAX;
+    menuH = CHMAX;
+  }
+  CW = menuW;
+  CH = menuH;
   canvasScale = 1;
   if (PD_BE_IS_GBA()) {
     CWMAX = CANVAS_MAX_W;
@@ -1032,9 +1176,71 @@ static int want_canvas(void) {
     return CANVAS_MENU;
   if (settings.aspect == PD_ASPECT_ORIGINAL)
     return PD_BE_IS_GBA() ? CANVAS_EXPAND : CANVAS_ZOOM;
-  if (!wideSupported || settings.aspect != PD_ASPECT_ZOOM_OUT)
-    return CANVAS_EXPAND;
-  return settings.autoZoom && !rewinding && pk_wide_scene() != PK_WIDE_SCENE_FIELD ? CANVAS_EXPAND : CANVAS_ZOOM;
+  return CANVAS_EXPAND; // the ZOOM step is the canvas's size (want_zoom)
+}
+
+/* ZOOM's steps for this game and panel (the companion's SETTINGS > SCREEN > ZOOM list): the canvas one whole game scale
+ * further out each, up to the panel's whole scale and the largest canvas the core holds. 0 is 1x (EXPAND as it was). */
+#define ZOOM_STEPS_MAX 6
+static char zoomText[ZOOM_STEPS_MAX][8];
+static const char *zoomTextPtr[ZOOM_STEPS_MAX];
+static int zoomStepCount;
+static int zoom_canvas(int fw, int fh, int level, int *w, int *h) {
+  if (!panelW || fw <= 0 || fh <= 0)
+    return 0;
+  int s = panelW / fw < panelH / fh ? panelW / fw : panelH / fh;
+  s -= level;
+  if (s < 1)
+    return 0;
+  int x = panelW / s, y = panelH / s;
+  if (x > CANVAS_MAX_W || y > CANVAS_MAX_H || x < fw || y < fh)
+    return 0;
+  *w = x, *h = y;
+  return 1;
+}
+/* How much more of the map a step shows, as the app's list says it ("1x", "1.4x"): the canvas's width over 1x's. */
+static int zoom_steps(void) {
+  int fw = (int)(gameW ? gameW : (unsigned)baseGW), fh = (int)(gameH ? gameH : (unsigned)baseGH);
+  int base = 0, n = 0;
+  for (int i = 0; i < ZOOM_STEPS_MAX; i++) {
+    int w = 0, h = 0;
+    if (!zoom_canvas(fw, fh, i, &w, &h))
+      break;
+    if (!i)
+      base = w;
+    int tenths = base > 0 ? (w * 10 + base / 2) / base : 10;
+    if (tenths < 10)
+      tenths = 10;
+    if (tenths % 10)
+      snprintf(zoomText[i], sizeof zoomText[i], "%d.%dx", tenths / 10, tenths % 10);
+    else
+      snprintf(zoomText[i], sizeof zoomText[i], "%dx", tenths / 10);
+    zoomTextPtr[i] = zoomText[i];
+    n++;
+  }
+  zoomStepCount = n;
+  return n;
+}
+static int want_zoom(void) {
+  if (settings.aspect == PD_ASPECT_ORIGINAL || !wideSupported)
+    return 0;
+  int level = settings.zoom + (settings.aspect == PD_ASPECT_ZOOM_OUT ? 1 : 0); // a file from before the list: its one step
+  // AUTO ZOOM IN keeps the step on the plain overworld and steps in everywhere else (a text box, a battle, a menu, a
+  // fade, a title), or they'd sit small in the middle of the window. Off, the step is the player's: it stays on every
+  // screen. (The DS cores report their field text boxes as the field, so a DS sign keeps the step either way.)
+  const int scene = pk_wide_scene();
+  if (!rewinding && settings.autoZoom && scene != PK_WIDE_SCENE_FIELD)
+    level = 0;
+  int n = zoom_steps();
+  if (level >= n)
+    level = n > 0 ? n - 1 : 0;
+  return level < 0 ? 0 : level;
+}
+/* Tell the companion's SETTINGS the steps (pd_host_info): no row for a game that can't EXPAND, or a panel with only 1x. */
+static void zoom_host_update(void) {
+  zoom_steps();
+  host.zoomCount = zoomStepCount;
+  host.zoomLabels = zoomStepCount > 0 ? zoomTextPtr : NULL;
 }
 
 /* Follow the aspect: when the wanted canvas differs, resize it and tell the frontend (it rescales to the new whole factor). */
@@ -1044,12 +1250,22 @@ static void canvas_update(bool notify) {
   if (PD_BE_IS_GBA() && !companion && settings.aspect == PD_ASPECT_ORIGINAL && fw && fh) {
     w = (int)fw;
     h = (int)fh;
-  } else if (panelW)
-    canvas_for((int)fw, (int)fh, want_canvas(), &w, &h);
+  } else if (panelW) {
+    const int kind = want_canvas();
+    canvas_for((int)fw, (int)fh, kind, kind == CANVAS_MENU ? 0 : want_zoom(), &w, &h);
+  }
   // While the Quick Menu is open, double the game pixels exactly so menu text and icons
   // draw at output resolution. Gameplay stays at 1x: a doubled canvas costs every frame
   // four times the pixels (Brick: 4.5 -> 7.1 ms per shown frame).
-  if (PD_BE_IS_GBA() && !companion && quickOpen && (w < 320 || h < 240) && w <= CWMAX / 2 && h <= CHMAX / 2) {
+  // Unless the frontend could then show it only smaller: a doubled canvas is shown at half the game's scale, so on a panel
+  // where that scale is odd (5x on 1280x960) its whole scale fell to 2x and the picture shrank while the menu was open.
+  bool shrinks = false;
+  if (panelW && w > 0 && h > 0) {
+    int s1 = panelW / w < panelH / h ? panelW / w : panelH / h;
+    int s2 = panelW / (2 * w) < panelH / (2 * h) ? panelW / (2 * w) : panelH / (2 * h);
+    shrinks = 2 * s2 < s1;
+  }
+  if (PD_BE_IS_GBA() && !companion && quickOpen && !shrinks && (w < 320 || h < 240) && w <= CWMAX / 2 && h <= CHMAX / 2) {
     scale = 2;
     w *= scale;
     h *= scale;
@@ -1064,6 +1280,49 @@ static void canvas_update(bool notify) {
     pd_canvas_init(&canvas, CW, CH, cvs);
   hudDrawnKey = 0;
   if (notify && realEnv) {
+    struct retro_game_geometry g = {(unsigned)CW, (unsigned)CH, (unsigned)CWMAX, (unsigned)CHMAX, (float)CW / (float)CH};
+    realEnv(RETRO_ENVIRONMENT_SET_GEOMETRY, &g);
+  }
+}
+
+/* The frontend's ASPECT row (pokedaisy_aspect), for a host that can draw past the game's edges: auto leaves the core's
+ * own ASPECT setting be. A change resizes the canvas at once and tells the frontend (it presents the new geometry). */
+static void apply_aspect_option(void) {
+  const char *a = pd_option("pokedaisy_aspect");
+  if (!a || !strcmp(a, "auto"))
+    return;
+  int aspect = settings.aspect, zoom = settings.zoom;
+  if (!strcmp(a, "expand"))
+    settings.aspect = PD_ASPECT_EXPAND;
+  else if (!strcmp(a, "zoom")) {
+    settings.aspect = PD_ASPECT_EXPAND;
+    settings.zoom = 1;
+  }
+  else if (!strcmp(a, "original"))
+    settings.aspect = PD_ASPECT_ORIGINAL;
+  if ((settings.aspect != aspect || settings.zoom != zoom) && CW > 0)
+    canvas_update(true);
+}
+static void apply_panel_option(void) {
+  const char *v = pd_option("pokedaisy_panel");
+  int w = 0, h = 0;
+  if (!v || sscanf(v, "%dx%d", &w, &h) != 2 || w <= 0 || h <= 0)
+    w = h = 0;
+  if (w == panelW && h == panelH)
+    return;
+  // The frontend's window changed (resized, fullscreen): the canvas has to follow it, or the picture keeps the
+  // letterbox it was laid out for. A larger maximum needs the frontend's texture remade (SET_SYSTEM_AV_INFO):
+  // SET_GEOMETRY may only change the base size.
+  const int oldMaxW = CWMAX, oldMaxH = CHMAX;
+  choose_canvas();
+  canvas_update(false);
+  if (!realEnv)
+    return;
+  if (CWMAX > oldMaxW || CHMAX > oldMaxH) {
+    struct retro_system_av_info av;
+    retro_get_system_av_info(&av);
+    realEnv(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &av);
+  } else {
     struct retro_game_geometry g = {(unsigned)CW, (unsigned)CH, (unsigned)CWMAX, (unsigned)CHMAX, (float)CW / (float)CH};
     realEnv(RETRO_ENVIRONMENT_SET_GEOMETRY, &g);
   }
@@ -1116,19 +1375,35 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info) {
 }
 
 RETRO_API bool retro_load_game(const struct retro_game_info *g) {
+  /* LANGUAGE's AUTO with no game language the menus have: the frontend's. */
+  unsigned lang = RETRO_LANGUAGE_ENGLISH;
+  if (realEnv && realEnv(RETRO_ENVIRONMENT_GET_LANGUAGE, &lang))
+    pd_tr_set_system(lang == RETRO_LANGUAGE_FRENCH ? PD_LANG_FR : lang == RETRO_LANGUAGE_GERMAN ? PD_LANG_DE :
+                     lang == RETRO_LANGUAGE_ITALIAN ? PD_LANG_IT : lang == RETRO_LANGUAGE_SPANISH ? PD_LANG_ES :
+                     lang == RETRO_LANGUAGE_PORTUGUESE_BRAZIL ? PD_LANG_BR :
+                     lang == RETRO_LANGUAGE_PORTUGUESE_PORTUGAL ? PD_LANG_PT : PD_LANG_EN);
   /* No game: armGBA offers "Start Core" (SET_SUPPORT_NO_GAME), but the companion needs one (PD_BE_AFTER_LOAD reads it). */
   if (!g || !mgba_retro_load_game(g))
     return false;
+  snprintf(pdGamePath, sizeof pdGamePath, "%s", g->path ? g->path : "");
   PD_BE_AFTER_LOAD(g);
   choose_canvas();
   read_options();
+  {
+    struct pd_hud probe;
+    memset(&probe, 0, sizeof probe);
+    hudHost = realEnv && realEnv(PD_ENV_SET_HUD, &probe);
+  }
   {
     struct retro_audio_buffer_status_callback abc = {audio_status_both};
     realEnv(RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK, &abc);
   }
   frameLate = false;
-  cvs = calloc((size_t)CWMAX * CHMAX, sizeof *cvs);
-  out565 = calloc((size_t)CWMAX * CHMAX, sizeof *out565);
+  quickFf = false;
+  pdHost = realEnv && realEnv(PD_ENV_SET_FAST_FORWARD, &quickFf);
+  // At the largest canvas the core ever lays out, not this panel's: the panel (and with it CWMAX) can change mid-game.
+  cvs = calloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H, sizeof *cvs);
+  out565 = calloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H, sizeof *out565);
   if (!cvs || !out565)
     return false;
   pd_canvas_init(&canvas, CW, CH, cvs);
@@ -1147,15 +1422,32 @@ RETRO_API bool retro_load_game(const struct retro_game_info *g) {
   const char *dir = NULL;
   if (realEnv(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dir) && dir && *dir) {
     snprintf(pdDir, sizeof pdDir, "%s/pokedaisy", dir);
-    mkdir(pdDir, 0755);
+    pd_mkdir(pdDir);
     snprintf(settingsPath, sizeof settingsPath, "%s/settings.ini", pdDir);
+    snprintf(pdStateRoot, sizeof pdStateRoot, "%s", dir);
+    char *slash = strrchr(pdStateRoot, '/');
+    char *backslash = strrchr(pdStateRoot, '\\');
+    if (backslash && (!slash || backslash > slash))
+      slash = backslash;
+    if (slash)
+      *slash = 0;
+    else
+      snprintf(pdStateRoot, sizeof pdStateRoot, ".");
   } else {
     *pdDir = 0;
     snprintf(settingsPath, sizeof settingsPath, "pokedaisy-settings.ini");
+    snprintf(pdStateRoot, sizeof pdStateRoot, ".");
   }
   pd_settings_load(&settings, settingsPath);
+  // ZOOM OUT became EXPAND's first ZOOM step. Every other file keeps its own ASPECT (ORIGINAL by default).
+  if (settings.aspect == PD_ASPECT_ZOOM_OUT) {
+    settings.aspect = PD_ASPECT_EXPAND;
+    if (settings.zoom < 1)
+      settings.zoom = 1;
+  }
   pd_look_apply(&game, &settings); // DARK MODE (pd_game_detect applied the game's windows with no settings)
   autoRunFlip = 0;
+  read_options(); // the frontend's ASPECT, over the file's own
   // A resident frontend loads the core again in the same process: nothing of the last game may survive.
   memset(&snap, 0, sizeof snap);
   memset(&hudState, 0, sizeof hudState);
@@ -1224,9 +1516,9 @@ RETRO_API bool retro_load_game(const struct retro_game_info *g) {
   job = JOB_NONE;
   quick_set_grid(settings.quickGrid);
   if (!ovPixels)
-    ovPixels = calloc((size_t)CWMAX * CHMAX, sizeof *ovPixels);
+    ovPixels = calloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H, sizeof *ovPixels);
   if (!ovScratch)
-    ovScratch = calloc((size_t)CWMAX * CHMAX, sizeof *ovScratch);
+    ovScratch = calloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H, sizeof *ovScratch);
   pd_ui_init(&ui, &settings);
   ui.handheldDex = ui.handheldParty = ui.guideController = ui.shoulderTabs = true;
   if (polishedActions) {
@@ -1327,6 +1619,12 @@ RETRO_API void retro_unload_game(void) {
   wideSupported = wideReady = false;
   quickOpen = flyList = repelList = false;
   PD_BE_BEFORE_UNLOAD();
+  if (hudHost && realEnv) { // the picture goes with hudPixels
+    struct pd_hud off;
+    memset(&off, 0, sizeof off);
+    realEnv(PD_ENV_SET_HUD, &off);
+    hudHost = false;
+  }
   mgba_retro_unload_game();
   free(cvs);
   free(out565);
@@ -1421,11 +1719,39 @@ static void touch_poll(void) {
 }
 static bool touch_tapped(void) { return touchWas && !touchDown; }
 static int hud_hit_at(int x, int y) {
-  // hudHits are in the HUD's own canvas, which draw_hud blends at (hudOx, hudOy), hudScale canvas pixels a pixel.
-  if (hudScale < 1 || x < hudOx || y < hudOy)
+  // hudHits are in the HUD's own canvas, which draw_hud puts at (hudOx, hudOy) in a hudTW x hudTH box.
+  if (hudScale < 1 || x < hudOx || y < hudOy || x >= hudOx + hudTW || y >= hudOy + hudTH)
     return -1;
-  x = (x - hudOx) / hudScale;
-  y = (y - hudOy) / hudScale;
+  x -= hudOx;
+  y -= hudOy;
+  if (hudPct < 100) { // the quarters (hud_quarters): each half of the HUD sits at its own edge of the box
+    const int qw = hudTW * hudPct / 200, qh = hudTH * hudPct / 200;
+    if (qw < 1 || qh < 1)
+      return -1;
+    if (x < hudTW / 2) {
+      if (x >= qw)
+        return -1;
+      x = x * (hudW / 2) / qw;
+    } else {
+      const int ox = hudTW - qw;
+      if (x < ox)
+        return -1;
+      x = hudW / 2 + (x - ox) * (hudW - hudW / 2) / qw;
+    }
+    if (y < hudTH / 2) {
+      if (y >= qh)
+        return -1;
+      y = y * (hudH / 2) / qh;
+    } else {
+      const int oy = hudTH - qh;
+      if (y < oy)
+        return -1;
+      y = hudH / 2 + (y - oy) * (hudH - hudH / 2) / qh;
+    }
+  } else {
+    x = x * hudW / hudTW;
+    y = y * hudH / hudTH;
+  }
   for (int i = 0; i < hudHits.n; i++)
     if (x >= hudHits.at[i].x && x < hudHits.at[i].x + hudHits.at[i].w && y >= hudHits.at[i].y &&
         y < hudHits.at[i].y + hudHits.at[i].h)
@@ -1456,6 +1782,10 @@ RETRO_API void retro_run(void) {
     optionsDirty = false;
     read_options();
   }
+  apply_aspect_option(); // the frontend's ASPECT can change mid-game: a lookup a frame, a resize only when it does
+  apply_panel_option();  // so can its window: the canvas is laid out for the panel again when that changes
+  zoom_host_update();    // the companion's ZOOM list follows the game's size and the window
+  canvas_update(true);   // the companion's ASPECT / ZOOM may have changed: resize only when it does
   quickBtn = key_of(settings.quickBtn);
   companionBtn = key_of(settings.companionBtn);
   hudBtn = key_of(settings.hudBtn);
@@ -1476,7 +1806,7 @@ RETRO_API void retro_run(void) {
   touch_poll();
   if (inputRunning || airborne)
     touchDown = touchWas = false;
-  if ((polishedActions || flashCfg) && down(quickBtn) && !quickOpen && !companion)
+  if ((polishedActions || flashCfg) && quick_key() && !quickOpen && !companion)
     snapshot(); // FLASH dims on who knows it and the lit flag: read as the menu opens, not up to 30 frames old
   // A tap on the quick menu: a tile (or a FLY / REPEL list row) is picked as A picks it; outside, the list or the menu
   // closes as B. On the field, a tap that starts and ends on one HUD part presses it; the game picture itself does nothing.
@@ -1543,7 +1873,7 @@ RETRO_API void retro_run(void) {
   struct quick_item quick[QUICK_COUNT];
   int quickN = 0;
   char repelWhy[32] = "";
-  const bool pcMenu = polishedActions && (quickOpen || down(quickBtn));
+  const bool pcMenu = polishedActions && (quickOpen || quick_key());
   const char *pcFieldWhy = pcMenu ? pd_field_input_reason(game.sha1, pd_lr_read_memory, core) : NULL;
   if (pcOk || gbf || polishedActions)
     quick[quickN++] = (struct quick_item){QUICK_PC, false, false,
@@ -1592,13 +1922,27 @@ RETRO_API void retro_run(void) {
   if (wildSwitch || gbf || polishedActions)
     quick[quickN++] = (struct quick_item){QUICK_WILD, settings.wildOff, false,
         settings.wildOff ? NULL : pcFieldWhy, 0, 0, NULL};
+  if (pdHost) {
+    // The slot's file looked at only while the menu is open (a file check a frame cost frames on SD cards).
+    static bool stateThere;
+    static int stateChecked;
+    if (quickOpen && --stateChecked <= 0) {
+      stateThere = quick_state_exists();
+      stateChecked = 30;
+    } else if (!quickOpen) {
+      stateChecked = 0;
+    }
+    quick[quickN++] = (struct quick_item){QUICK_SAVE_STATE, false, false, NULL, 0, 0, NULL};
+    quick[quickN++] = (struct quick_item){QUICK_LOAD_STATE, false, false, stateThere ? NULL : "No state saved yet", 0, 0, NULL};
+    quick[quickN++] = (struct quick_item){QUICK_FF, false, quickFf, NULL, 0, 0, NULL};
+  }
   if (host.hasHud && settings.hud)
     quick[quickN++] = (struct quick_item){QUICK_HUD, false, false, hudShown && hudHits.n ? NULL : "No HUD on screen", 0, 0, NULL};
   quick[quickN++] = (struct quick_item){QUICK_COMPANION, false, false, NULL, 0, 0, NULL};
   if (quickSel >= quickN)
     quickSel = 0;
   quick_set_grid(settings.quickGrid);
-  if (down(quickBtn) && !companion && !hudFocus) {
+  if (quick_key() && !companion && !hudFocus) {
     quickOpen = !quickOpen;
     flyList = repelList = false;
     flyAsk = 0;
@@ -1708,6 +2052,16 @@ RETRO_API void retro_run(void) {
         settings.wildOff = !settings.wildOff;
         pd_settings_save(&settings, settingsPath);
         notice(settings.wildOff ? "Wild encounters off" : "Wild encounters on");
+        break;
+      case QUICK_SAVE_STATE:
+        notice(quick_state_save() ? "State saved" : "State save failed");
+        break;
+      case QUICK_LOAD_STATE:
+        notice(quick_state_load() ? "State loaded" : "State load failed");
+        break;
+      case QUICK_FF:
+        notice(quick_ff_set(!quickFf) ? (quickFf ? "Fast forward on" : "Fast forward off")
+                                      : "Fast forward unavailable");
         break;
       case QUICK_COMPANION:
         companion = true;
@@ -1914,6 +2268,12 @@ RETRO_API void retro_run(void) {
   const bool repeat = late && canDupe && haveGameFrame && !paused && !quickOpen &&
                       (!ff || (expanded && !repeatedFrame));
   maskGame = paused;
+  // The button that closed the companion / quick menu / HUD cursor (A on a pick, B backing out) is still held: it stays
+  // out of the game until let go, as the app's menuHeld (GitHub #1100: on a Steam Deck it answered the game's prompt).
+  static bool wasPaused;
+  if (wasPaused && !paused)
+    shortcutBlocked |= held;
+  wasPaused = paused;
   shortcutExclusive = false;
   if (!paused) {
     if (polishedActions && !rewinding && settings.wildOff &&
@@ -2164,6 +2524,7 @@ RETRO_API void retro_run(void) {
     return;
   }
   PF_T(td0);
+  hudNativeOn = false; // the companion or the quick menu has the picture, not the HUD
   if (companion) {
     pd_ui_update(&ui, &snap);
     ui.focusId = focusId;
@@ -2231,11 +2592,31 @@ RETRO_API void retro_run(void) {
       hudState.pc = pcOk || gbf || polishedActions;
       hudState.wild = hud_wild_uncaught(&game, &snap);
       draw_hud();
-    } else
+    } else {
+      // Hidden (a menu, a battle): drawn again from scratch when it comes back. Its cached picture's key alone stayed
+      // the same after the START menu, so hudShown stayed false until something in it changed (a step).
       hudShown = false;
+      hudDrawnKey = 0;
+    }
   }
   PF_T(td1);
   pf_add(PF_DRAW, td1 - td0);
+  // The HUD at the frontend's own pixels, for one that draws it (PD_ENV_SET_HUD). A frame it shows again sends nothing,
+  // so the HUD stays as it was with the picture.
+  if (hudHost && realEnv) {
+    struct pd_hud hud;
+    memset(&hud, 0, sizeof hud);
+    if (hudNativeOn) {
+      hud.pixels = hudPixels;
+      hud.src_w = hudW;
+      hud.src_h = hudH;
+      hud.w = CW;
+      hud.h = CH;
+      hud.pct = hudNativePct;
+      hud.active = 1;
+    }
+    realEnv(PD_ENV_SET_HUD, &hud);
+  }
   present();
   haveGameFrame = !companion && !quickOpen && !hudFocus;
   PF_T(td2);

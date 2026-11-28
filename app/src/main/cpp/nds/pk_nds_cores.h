@@ -1,4 +1,5 @@
-// The two DS cores behind pk_nds.h: melonDS (pk_nds.cpp, pk_ndsm_*) and DSperate (pk_nds_dsp.cpp, pk_ndsd_*), each with
+// The three DS cores behind pk_nds.h: melonDS (pk_nds.cpp, pk_ndsm_*), DSperate (pk_nds_dsp.cpp, pk_ndsd_*) and BananaDS
+// (bananads/pk_nds_bnd.cpp in libpkbananads.so, pk_ndsb_*), each with
 // the same functions under its own prefix. pk_nds_core.cpp's pk_nds_* hand every call to the one that's up; the rest of
 // the app never knows which (pk_nds_set_core picks it before pk_nds_init).
 #pragma once
@@ -22,12 +23,14 @@
     X(int, state_matches_save, (const char* path), (path)) \
     X(void, read, (uint32_t addr, uint8_t* dst, int len), (addr, dst, len)) \
     X(bool, write, (uint32_t addr, const uint8_t* src, int len), (addr, src, len)) \
+    X(bool, code_write, (uint32_t addr, const uint8_t* src, int len), (addr, src, len)) \
     X(int, field_bits, (void), ()) \
     X(int, action, (int action, const uint32_t args[4]), (action, args)) \
     X(int, action_status, (int seq), (seq)) \
     X(bool, action_results, (int seq, uint32_t* out), (seq, out)) \
     X(void, set_wild_off, (bool off), (off)) \
     X(void, set_keep_start_menu, (bool on), (on)) \
+    X(void, set_exp_share, (int mode, uint32_t mask), (mode, mask)) \
     X(void, set_cpu_boost, (bool on), (on)) \
     X(int, set_cheats, (const uint32_t* words, int nWords, const int32_t* lengths, int nCheats), (words, nWords, lengths, nCheats)) \
     X(int, bgm, (void), ()) \
@@ -56,20 +59,39 @@
 extern "C" {
 #endif
 
-#define PK_NDS_DECLARE(ret, name, params, args) ret pk_ndsm_##name params; ret pk_ndsd_##name params;
+#define PK_NDS_DECLARE(ret, name, params, args) ret pk_ndsm_##name params; ret pk_ndsd_##name params; ret pk_ndsb_##name params;
 PK_NDS_CORE_CALLS(PK_NDS_DECLARE)
 #undef PK_NDS_DECLARE
 
 bool pk_ndsm_init(const char* romPath, const char* savePath, int sampleRate);
 void pk_ndsm_deinit(void);
 bool pk_ndsm_active(void);
+// melonDS's main RAM and its mask: the DS companion reads the game's save out of it.
+const uint8_t* pk_ndsm_main_ram(void);
+uint32_t pk_ndsm_main_ram_size(void);
+// melonDS's cart save memory as it is now (what a libretro frontend reads for RETRO_MEMORY_SAVE_RAM).
+const uint8_t* pk_ndsm_save_data(void);
+uint32_t pk_ndsm_save_length(void);
+// A state in memory (the file's bytes): its length, written to [out] when it fits [cap] (NULL: the length alone; 0: failed).
+size_t pk_ndsm_state_mem(uint8_t* out, size_t cap);
+// Such a state loaded with the battery save the console holds now kept: a libretro frontend owns the save file.
+bool pk_ndsm_load_state_mem_keeping_save(const uint8_t* data, size_t len);
 bool pk_ndsd_init(const char* romPath, const char* savePath, int sampleRate);
 void pk_ndsd_deinit(void);
 bool pk_ndsd_active(void);
+bool pk_ndsb_init(const char* romPath, const char* savePath, int sampleRate);
+void pk_ndsb_deinit(void);
+bool pk_ndsb_active(void);
+// BananaDS keeps its own copy of the field read (its library's): WILD ENCOUNTERS' rates go to it too.
+void pk_ndsb_set_wild_rates(const int32_t* triples, int n);
+// DS RESOLUTION's window goes to BananaDS too (it puts its hires frames there itself); takes the reference.
+struct ANativeWindow;
+void pk_ndsb_set_window(struct ANativeWindow* window);
 
 // The magic word each core's states start with (pk_nds_state_matches_save tells another core's state from its own).
 #define PK_NDS_STATE_MAGIC_MELONDS 0x53444B50u   // "PKDS"
 #define PK_NDS_STATE_MAGIC_DSPERATE 0x50444B50u  // "PKDP"
+#define PK_NDS_STATE_MAGIC_BANANADS 0x42444B50u  // "PKDB"
 
 #ifdef __cplusplus
 }

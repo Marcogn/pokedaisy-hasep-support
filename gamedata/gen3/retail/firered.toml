@@ -96,5 +96,8 @@ trainerCard = 'TRAINER_CARD_FIRERED'
 [config.firered_rev0_retail]
 base = 'firered_rev0'
 trainerCard = 'TRAINER_CARD_FIRERED'
+# DEX, GUIDE's HERE / NEXT BOSS, the HUD's WILD and REPEL STEPS (the save's vars come with the guide tables).
+pokedex = 'POKEDEX_FIRERED_REV0'
+guideTables = 'GUIDE_TABLES_FIRERED_REV0'
 actionCursor = 0x02023FF8
 moveCursor = 0x02023FFC

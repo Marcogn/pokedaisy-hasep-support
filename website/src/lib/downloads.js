@@ -1,7 +1,7 @@
 // The homepage's DOWNLOAD cards: every platform PokeDaisy ships on, each with its files and its install guide.
 // A file is looked up by name in the newest release that has it (getReleases: published, not pre-releases), so a
 // platform's files show up by themselves once a release carries them (docs/RELEASING.md's list); until then the row
-// reads SOON. Windows and iOS are on the way: a card with no files.
+// reads SOON. iOS is on the way: a card with no files.
 import { msg } from '../i18n/index.js';
 
 /**
@@ -20,7 +20,7 @@ export const PLATFORMS = [
     id: 'linux', name: 'LINUX', icon: 'tux', guide: '/docs/linux-install/', localGuide: true,
     text: msg('Steam Deck, Linux PCs and Linux handhelds, or the cores alone for RetroArch.'),
     files: [
-      { match: 'pokedaisy-linux-x86_64.zip', icon: 'pc', label: msg('Steam Deck and Linux PCs') },
+      { match: 'pokedaisy-linux-x86_64.zip', icon: 'desktop', label: msg('Steam Deck and Linux PCs') },
       { match: 'pokedaisy-linux-aarch64.zip', icon: 'handheld', label: msg('TrimUI handhelds (CrossMix, NextUI)') },
       { match: 'pokedaisy-portmaster-aarch64.zip', icon: 'handheld', label: msg('PortMaster handhelds (ROCKNIX, Knulli, muOS)') },
       { match: 'PokeDaisy-NXRedux.zip', icon: 'handheld', label: msg('TrimUI Brick on NXRedux') },
@@ -36,8 +36,14 @@ export const PLATFORMS = [
       { match: 'pokedaisy.cia', icon: 'n3ds', label: msg('The app for the HOME Menu (.cia)') },
     ],
   },
-  { id: 'windows', name: 'WINDOWS', icon: 'windows', soon: true, files: [] },
-  { id: 'ios', name: 'IOS', icon: 'iphone', soon: true, files: [] },
+  {
+    id: 'windows', name: 'WINDOWS', icon: 'windows', guide: '/docs/windows-install/',
+    text: msg('Windows 10 or 11, on a 64-bit PC.'),
+    files: [
+      { match: (n) => /^PokeDaisy-.+-windows-x86_64\.zip$/.test(n), icon: 'desktop', label: msg('Windows PCs') },
+    ],
+  },
+  { id: 'ios', name: 'iOS', icon: 'iphone', soon: true, files: [] },
 ];
 
 const matches = (file, name) => (typeof file.match === 'string' ? file.match === name : file.match(name));

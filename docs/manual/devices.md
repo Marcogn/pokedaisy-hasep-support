@@ -3,7 +3,7 @@ title: Screens and devices
 summary: How PokeDaisy uses two screens, one screen, a phone held upright or a folding phone, and the settings that move the game and companion around.
 section: start
 order: 3
-keywords: [nds, nintendo ds, touch screen, stylus, platinum, heartgold, soulsilver, dual screen, two screens, thor, ayn, retroid, duo, anbernic, rg ds, single screen, pocket 6, phone, portrait, landscape, rotate, rotation, tablet, side panel, window, modal, popup, loading, slow loading, companion view, display, bottom screen, top screen, foldable, folding phone, fold, flip, galaxy z fold, pixel fold, hinge, tabletop, flex mode, book, half open]
+keywords: [nds, nintendo ds, touch screen, stylus, platinum, heartgold, soulsilver, dual screen, two screens, thor, ayn, retroid, duo, anbernic, rg ds, ayaneo, pocket ds, single screen, pocket 6, phone, portrait, landscape, rotate, rotation, tablet, side panel, window, modal, popup, loading, slow loading, companion view, display, bottom screen, top screen, foldable, folding phone, fold, flip, galaxy z fold, pixel fold, hinge, tabletop, flex mode, book, half open]
 ---
 
 PokeDaisy works with two screens or one. With two, the game is on top and the companion below. With one, the companion slides in beside the game, and on a phone held upright it sits under it. This page covers each setup and the settings that go with it.
@@ -14,8 +14,9 @@ PokeDaisy works with two screens or one. With two, the game is on top and the co
 | --- | --- |
 | AYN Thor | What PokeDaisy was made on. The companion is laid out for its bottom screen. |
 | Retroid Pocket Duo Lite | Its bottom screen is squarer (4:3), so a few screens rearrange to fit: the Pokémon summary puts its types beside the icon, and `STATES` uses flatter screenshots. |
-| Retroid Pocket Duo | Should work the same way; not yet tried on real hardware. |
-| Anbernic RG DS | Should work with `SWAP SCREENS` on (see below); not yet tried on real hardware. Its screens are small (640 by 480), so the companion's text is a size smaller there, and a few screens squeeze: a move's power and PP sit beside its name, and `DEX` puts height and weight on two lines. |
+| Retroid Pocket Duo | Works the same way. |
+| AYANEO Pocket DS | Works since v1.5.0. When a game starts, PokeDaisy opens an empty window on the bottom screen so AYANEO's own panel steps aside for the companion (see `SINGLE SCREEN` below). |
+| Anbernic RG DS | Works with `SWAP SCREENS` on (see below). Its screens are small (640 by 480), so the companion's text is a size smaller there, and a few screens squeeze: a move's power and PP sit beside its name, and `DEX` puts height and weight on two lines. Its chip is slow for DS games: `DS CORE` on `AUTO` picks the lighter `DSPERATE` engine there, and `LIGHT COMPANION` keeps your buttons quick. |
 
 The game always opens on the device's main display, with the companion on the other one, even if you start it from the bottom screen.
 
@@ -28,6 +29,8 @@ Rather use your buttons down there? Press `X` while you walk around and they mov
 Some devices treat their bottom screen as the main display, which would put the game below and the companion on top. `SWAP SCREENS` trades them, so the game moves to the other screen and the companion takes the main one.
 
 You'll find it in the `SCREEN` group of Settings on the top screen and of the companion's `SETTINGS`. It only shows on a device with a second screen. Flipped from the companion, it swaps right away; flipped from the top-screen Settings, the game picks it up when you go back to it.
+
+The touch controls stay with the game when you swap screens or leave the app and come back. Disconnecting the second screen brings the game and its controls back to the main display.
 
 ### On a TV
 
@@ -90,7 +93,7 @@ HeartGold and SoulSilver (the USA releases), Platinum, Black, White, Black 2 and
 
 In the German HeartGold and SoulSilver, `ONE SCREEN` keeps the touch screen small in the corner, as `PICTURE IN PICTURE` does, so it's always there.
 
-In Origin HeartGold, `ONE SCREEN` floats the touch screen in for its X menu, its options and its battles: its battle system is its own, so its battle buttons aren't on the top screen. Whenever a battle waits for you (your moves, your party), its touch screen floats in and you tap the game's own buttons on it. While the battle plays, the game fills the screen again. The companion's `BATTLE` tab still shows the matchups.
+In Origin HeartGold, `ONE SCREEN` floats the touch screen in for its X menu and its options. Its battles get the battle buttons as HeartGold's do (see [Battle](battle.md#on-one-screen-battle-buttons)), and its party and its other questions in a battle float in for you to tap. `POKéMON` opens the game's own party there: you pick who to send out on it yourself. The companion's `BATTLE` tab still shows the matchups.
 
 ## Single-screen handhelds
 
@@ -126,7 +129,7 @@ Small `L` and `R` keys at both ends of the tab bar remind you which buttons chan
 - **Lock it beside the game:** tap the padlock tab on the panel's left edge. The game moves over to make room, and both stay on screen as you play. Tap the padlock again and the panel goes back to sliding over the game. A locked panel stays open when you press `BACK` with nothing to go back from, and it comes back the next time you start a game.
 - **Resize it:** drag the padlock tab sideways. The panel starts at half the screen, which shows the game at exactly 4x on a 1080p screen. While you drag, it snaps when the game lands close to a whole-number size, so the pixels stay even.
 
-While the panel is locked, the open and close tabs turn see-through so they don't get in the way. The touch controls stay on the game's side whenever the panel is open.
+While the panel is locked, the open and close tabs turn see-through so they don't get in the way. The touch controls stay on the game's side whenever the panel is open. You can tap or drag the padlock tab while touch controls are showing.
 
 Hold `BACK` to leave the game, as always.
 
@@ -138,7 +141,7 @@ Hold `BACK` to leave the game, as always.
 Hold a phone upright and the game sits across the top of the screen, with the companion docked below it and the touch controls under that. It's open until you hide it: there's nothing to slide in. In a DS game the touch screen takes the companion's place, between the top screen and the buttons.
 
 - **Change its height:** drag the grip on the companion's top edge up or down. It snaps to the default size (the shape of the Thor's bottom screen) and to the largest size (everything under the game).
-- **Step through sizes:** tap the grip to go from small, to the default, to everything under the game, then to hidden, and round again.
+- **Step through sizes:** tap the grip to go from small, to the default, to everything under the game, then to hidden, and round again. When the space under the game only fits the smallest size, a tap switches between shown and hidden.
 - **Hide it:** with the companion hidden, the game has the screen to itself and only the grip stays, along the bottom. Tap it, drag it, or press the `COMPANION` hotkey to bring the companion back.
 - **Touch controls:** they get the space at the bottom of the screen, under the companion. With the companion `AT BOTTOM` (below) they go in the gap between the game and the companion when there's room, and lie over the game when there isn't. The phone held upright has its own layout, and `POSITION` on the `TOUCH CONTROLS` page puts the buttons at the top, middle or bottom of their space; see [Touch controls](controls.md#touch-controls).
 
@@ -155,11 +158,17 @@ With `ASPECT` set to `EXPAND`, the game fills everything above the companion, so
 
 On a folding phone, PokeDaisy uses the fold the way a two-screen handheld uses its two screens. It switches as soon as you fold or unfold, mid-game.
 
-- **Half open like a laptop** (the fold across the screen, the bottom half resting on a table): the game is on the top half and the companion fills the bottom half. In a DS game the touch screen takes the bottom half, like on a DS, with its `COMPANION` switch to bring the companion up. With no controller, the touch controls sit on the top half, beside the game.
+- **Half open like a laptop** (the fold across the screen, the bottom half resting on a table): the game is on the top half and the companion fills the bottom half. In a DS game the touch screen takes the bottom half, like on a DS, with its `COMPANION` switch to bring the companion up. With no controller, the touch controls sit on the top half, beside the game. To have them on the bottom half instead, either side of a narrower companion, set `TABLETOP CONTROLS` to `BOTTOM SIDES`.
 - **Half open like a book** (the fold down the middle): the game is on the left page and the companion on the right. `BACK` goes back inside the companion, and the companion stays open.
 - **Fully open or closed:** the usual layouts for one screen, sideways or upright, as above.
 
-The `FOLD LAYOUT` setting (in the `SCREEN` group, on both screens) turns this on or off. It's on to start with, and it only shows up once your phone has reported a fold. Off, a half open phone gets the same layout as a flat one.
+The `FOLD LAYOUT` setting (in the `SCREEN` group, on both screens) picks when this happens:
+
+- `HALF OPEN` (the default): only while the phone is half open.
+- `ALWAYS`: unfolded flat too, split at the fold the same way.
+- `OFF`: a half open phone gets the same layout as a flat one.
+
+It only shows up once your phone has reported a fold. `TABLETOP CONTROLS`, right under it, picks where the touch controls go with the fold across the screen: `ON GAME` (the default) or `BOTTOM SIDES`.
 
 ## Rotating the device
 

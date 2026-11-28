@@ -10,7 +10,7 @@ between iiSU versions.
 
 ## 1. Add PokeDaisy to iiSU's emulator list (once)
 
-iiSU's own lists belong to iiSU, so this repo doesn't ship copies of them: you add
+iiSU's own lists belong to iiSU, so PokeDaisy doesn't ship copies of them: you add
 PokeDaisy's entry to the list your iiSU already has.
 
 1. Find iiSU's current list: `emuladores.json` in the `iiSULauncher/Emuladores/`
@@ -100,7 +100,7 @@ back to iiSU. Other games in the GBA folder still open in the console's emulator
   The games you set to PokeDaisy may need step 2 again too.
 - **The bottom screen says the game isn't supported**: the game plays, but the
   companion only works with the games in the main README's
-  [supported games](../../README.md#supported-games) list. Keep other games on
+  [supported games](https://pokedaisy.com/compatibility/) list. Keep other games on
   your usual emulator.
 - **No save**: PokeDaisy finds a save by the ROM's file name in its saves folder.
   Point PokeDaisy's Settings > Folders at the folder your other emulator saves to

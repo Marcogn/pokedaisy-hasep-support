@@ -8,6 +8,10 @@ package com.pokedaisy.app
  * frame; the skipped one's learned by trying one in two the first time the drawn ones run over) shared over the run must fit [budgetNanos] (within [REACH]). Nothing is skipped on a device that keeps
  * up, nor on one so slow that even [maxSkip] wouldn't bring the speed back.
  *
+ * Skipping starts only once the game really falls behind: its frames come further apart than the DS's ([frameNanos],
+ * [BEHIND]) for [RAISE_FRAMES] in a row. The core's time alone over [budgetNanos] isn't enough: a Thor's battles run at
+ * 14-16 ms a frame and still keep the DS's 60 frames a second, and skipping there halved the picture at every attack.
+ *
  * Fast-forward has its own pattern (EmulatorEngine's groups); this is for 1x only. Drawing is promised a frame ahead
  * (the next frame's 3D starts at this one's line 215: MgbaCore.pkNdsSetDraw's drawNext), so [plan] gives both.
  * Measured headless (HeartGold walking, the Mac): drawing one frame in 2 saves ~18% of the frames' time, one in 4 ~28%.
@@ -15,6 +19,7 @@ package com.pokedaisy.app
 internal class DsFrameSkip(
     private val budgetNanos: Long = DEFAULT_BUDGET_NANOS,
     private val maxSkip: Int = MAX_SKIP,
+    private val frameNanos: Long = DS_FRAME_NANOS,
 ) {
     /** Frames skipped after each drawn one, now. */
     var skip = 0
@@ -25,6 +30,11 @@ internal class DsFrameSkip(
     private var drawnAvg = 0.0    // nanos, a drawn frame
     private var skippedShare = 0.0   // a skipped frame's time over a drawn one's (0 until one was measured)
     private var lower = 0         // frames in a row that wanted fewer skips
+    private var higher = 0        // frames in a row that wanted more skips and were behind
+    private var lastStart = 0L    // nanoTime the last frame's core started (0 = none since a reset)
+    // Nanos from one frame's start to the next. Starts at a DS frame: seeded from the first gap after a start or a reset
+    // (the core's boot, a state load: up to 4 frames), it read as behind for seconds and skipped a heavy scene for nothing.
+    private var periodAvg = frameNanos.toDouble()
 
     /** Before a frame: whether it is drawn, and whether the next one will be. */
     fun plan(): Pair<Boolean, Boolean> {
@@ -34,8 +44,14 @@ internal class DsFrameSkip(
         return draw to nextDraw
     }
 
-    /** After a frame: how long the core took, and whether [plan] had it drawn. */
-    fun frameDone(nanos: Long, drawn: Boolean) {
+    /** After a frame: when its core started and how long it took, and whether [plan] had it drawn. */
+    fun frameDone(startNanos: Long, nanos: Long, drawn: Boolean) {
+        if (lastStart != 0L) {
+            // Capped: a pause (the screen off, a held transition) mustn't read as the game falling behind.
+            val period = (startNanos - lastStart).coerceIn(0L, frameNanos * 4).toDouble()
+            periodAvg += (period - periodAvg) / PERIOD_OVER
+        }
+        lastStart = startNanos
         if (drawn) drawnAvg = if (drawnAvg == 0.0) nanos.toDouble() else drawnAvg + (nanos - drawnAvg) / AVERAGE_OVER
         else if (drawnAvg > 0.0) {
             // Kept as a share of a drawn frame: the scene's weight changes both, the share much less.
@@ -43,9 +59,13 @@ internal class DsFrameSkip(
             skippedShare = if (skippedShare == 0.0) share else skippedShare + (share - skippedShare) / AVERAGE_OVER
         }
         val want = wanted()
-        if (want > skip) { skip = want; lower = 0 }                     // behind: at once
-        else if (want < skip) { if (++lower >= SETTLE_FRAMES) { skip = want; lower = 0 } }   // ahead: once it holds
-        else lower = 0
+        // More skips only once the game has fallen behind for a second: a battle's frames over the budget while the
+        // device still keeps the DS's speed halved the picture for nothing (Black 2 on a Thor: 30 frames a second for
+        // half a second at every attack). Fewer once the frames fit again, as before.
+        val behind = periodAvg > frameNanos * BEHIND
+        if (want > skip) { lower = 0; if (!behind) higher = 0 else if (++higher >= RAISE_FRAMES) { skip = want; higher = 0 } }
+        else if (want < skip) { higher = 0; if (++lower >= SETTLE_FRAMES) { skip = want; lower = 0 } }   // ahead: once it holds
+        else { lower = 0; higher = 0 }
     }
 
     /** For the log: the averages it decides from. */
@@ -59,6 +79,9 @@ internal class DsFrameSkip(
         streak = 0
         skip = 0
         lower = 0
+        higher = 0
+        lastStart = 0L
+        periodAvg = frameNanos.toDouble()
     }
 
     private fun wanted(): Int {
@@ -80,6 +103,14 @@ internal class DsFrameSkip(
         const val AVERAGE_OVER = 16.0
         /** Half a second of frames that would fit with fewer skips before taking one away (no flicking back and forth). */
         const val SETTLE_FRAMES = 30
+        /** A DS frame (59.83 a second). */
+        val DS_FRAME_NANOS = (1_000_000_000.0 / EmulatorEngine.NDS_FPS).toLong()
+        /** Behind: frames 5% further apart than the DS's (under ~57 a second). */
+        const val BEHIND = 1.05
+        /** The frames' spacing averaged over about a second. */
+        const val PERIOD_OVER = 60.0
+        /** A second of frames behind before skipping more: a moment's peak passes without a skip. */
+        const val RAISE_FRAMES = 60
         /** How near the budget a skip must bring the frames to be worth it: within 10% of the DS's speed. */
         const val REACH = 1.1
     }

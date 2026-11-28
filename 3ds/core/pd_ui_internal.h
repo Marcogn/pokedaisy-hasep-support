@@ -7,6 +7,7 @@
 
 #include "pd_icons_gen.h"
 #include "pd_style.h"
+#include "pd_tr.h"
 #include "pd_ui.h"
 
 // Where a tab's content starts: the tab bar is along the bottom, like the app's
@@ -128,7 +129,7 @@ enum setting_row {
     SETTING_HUD,       // hosts with hasHud: opens its page
     SETTING_FILTER, // optional host LCD display mask
     SETTING_QUICK_MENU, // hosts with hasQuickMenu: two styles, flips in place
-    SETTING_QUICK_BTN,  // hosts with hasButtonRows: cycle X / Y / L2 / R2
+    SETTING_QUICK_BTN,  // hosts with hasButtonRows: cycle X / Y / L2 / R2 / L3
     SETTING_COMPANION_BTN,
     SETTING_HUD_BTN,    // also NONE
     SETTING_PERF,      // hosts with hasPerf: flips in place
@@ -158,7 +159,11 @@ enum setting_row {
     SETTING_INSTANT_TEXT,
     SETTING_TRADE_EVOS,
     SETTING_NUZLOCKE,
-    SETTING_SCENE,      // + enum pd_scene: SCENE SPEEDS' rows, each a pick-list
+    SETTING_LANGUAGE,   // LANGUAGE: a pick-list, AUTO first
+    // ZOOM must stay out of SETTING_SCENE's block: its rows are SETTING_SCENE + i, so a setting sat inside it read
+    // as a scene row (ZOOM's tap opened a scene's pick-list instead and the step never changed).
+    SETTING_ZOOM,       // hosts with zoomCount > 1: EXPAND's steps out (the app's SETTINGS > SCREEN > ZOOM)
+    SETTING_SCENE,      // + enum pd_scene: SCENE SPEEDS' rows, each a pick-list; the last, so nothing follows its ids
 };
 
 int ui_settings_follow(int scroll, int y, int height);

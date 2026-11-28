@@ -1,0 +1,97 @@
+---
+// How to get the beta (Base.astro hosts it on every page while there is one: releases.js' getBeta): any
+// [data-beta-open] opens it - the games table's BETA tags and details window, the ROM check's answer for a game only
+// the beta reads. Three steps: the beta's APK, installed over the app, then BETA UPDATES keeps it on betas. The
+// release's app has no BETA UPDATES row yet, so the first beta is always installed by hand.
+import Pixel from './Pixel.astro';
+import { getBeta } from '../lib/betaRelease.js';
+import { betaGameCount } from '../lib/beta.js';
+import { formatSize } from '../lib/downloads.js';
+import { trFor } from '../i18n/index.js';
+
+const tr = trFor(Astro.url);
+const beta = await getBeta();
+const games = betaGameCount(beta?.add);
+---
+{beta && (
+  <dialog class="btm f-card" data-beta-modal aria-labelledby="btm-title">
+    <div class="btm-head">
+      <h2 id="btm-title" class="btm-title"><span class="chip f-pillYellow">BETA</span> {tr('Get the beta')}</h2>
+      <button type="button" class="icon-link btm-close" data-beta-close aria-label={tr('CLOSE')}><Pixel name="winClose" scale={1} /></button>
+    </div>
+    <p class="btm-lead">
+      {games > 0
+        ? tr('PokeDaisy {version} reads {n} more games and versions, before it goes out to everyone. A beta can still have rough edges.', { version: beta.version, n: games })
+        : tr('PokeDaisy {version} is out for testing, before it goes out to everyone. A beta can still have rough edges.', { version: beta.version })}
+    </p>
+    <ol class="btm-steps">
+      <li>
+        <span class="btm-n pf">1</span>
+        <div class="btm-step">
+          <p>{tr('Download the beta\'s APK on your Android device.')}</p>
+          <a class="btn f-primary h-primaryHot primary btm-apk" href={beta.apk?.url ?? beta.url} download={beta.apk ? '' : undefined} data-track-where="beta">
+            <Pixel name="download" scale={1} /> {tr('DOWNLOAD BETA')}
+            <span class="btm-ver">v{beta.version}{beta.apk?.size ? ` · ${formatSize(beta.apk.size)}` : ''}</span>
+          </a>
+        </div>
+      </li>
+      <li>
+        <span class="btm-n pf">2</span>
+        <div class="btm-step"><p>{tr('Open it and install it over PokeDaisy. Your games, saves and settings stay.')}</p></div>
+      </li>
+      <li>
+        <span class="btm-n pf">3</span>
+        <div class="btm-step"><p set:html={tr('That\'s it. From then on Settings > <b>BETA UPDATES</b> is on, so the app offers you each new beta and then the full version. Turn it off to wait for the full version instead.')} /></div>
+      </li>
+    </ol>
+  </dialog>
+)}
+
+<script>
+  // Open on any [data-beta-open] (also ones the ROM check adds later), close on X, Escape or a click outside.
+  const dialog = document.querySelector<HTMLDialogElement>('[data-beta-modal]');
+  if (dialog && typeof dialog.showModal === 'function') {
+    document.addEventListener('click', (e) => {
+      const opener = e.target instanceof Element ? e.target.closest('[data-beta-open]') : null;
+      if (!opener) return;
+      e.preventDefault();
+      dialog.showModal();
+      dialog.querySelector<HTMLElement>('.btm-apk')?.focus();
+    });
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog || (e.target instanceof Element && e.target.closest('[data-beta-close]'))) dialog.close();
+    });
+  }
+</script>
+
+<style>
+  .btm {
+    width: min(520px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow: auto;
+    margin: auto; padding: calc(var(--px) * 7); color: var(--ink); background: none;
+    filter: var(--hard-shadow);
+  }
+  .btm::backdrop { background: rgba(10, 9, 16, 0.55); backdrop-filter: blur(3px); }
+  .btm[open] { display: grid; gap: 16px; animation: btm-open 0.32s var(--step); }
+  @keyframes btm-open {
+    0% { transform: translateY(calc(var(--px) * 4)) scaleY(0.15); }
+    60% { transform: translateY(calc(var(--px) * -1)) scaleY(1.04); }
+    100% { transform: none; }
+  }
+  .btm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .btm-title { display: flex; align-items: center; gap: 12px; font-size: var(--t-l); letter-spacing: 0.0625em; text-shadow: var(--bold); }
+  .btm-title .chip { font-size: var(--t-xs); text-shadow: none; }
+  .btm-close { margin: -8px -8px 0 0; }
+  .btm-lead { font-size: var(--r-m); line-height: 1.5; color: var(--ink-2); }
+  .btm-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .btm-steps li { display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: start; }
+  .btm-n { display: grid; place-items: center; width: 28px; height: 28px; background: var(--red); color: #fff; font-size: var(--t-s); }
+  .btm-step { display: grid; gap: 10px; font-size: var(--r-m); line-height: 1.5; }
+  .btm-step b { font-family: var(--font-pixel); font-weight: normal; font-size: 1.05em; letter-spacing: 0.04em; }
+  .btm-apk { justify-content: center; flex-wrap: wrap; justify-self: start; }
+  .btm-ver { font-size: var(--t-s); opacity: 0.85; }
+  .btm-gh { display: inline-flex; align-items: center; gap: 8px; justify-self: center; color: var(--blue); text-decoration: none; letter-spacing: 0.0625em; }
+  .btm-gh:hover { text-decoration: underline; }
+  /* GitHub's mark is black: white in dark mode, as in the header. */
+  :global(:root[data-scheme='dark']:not([data-theme])) .btm-gh :global(.pixel) { filter: brightness(0) invert(0.95); }
+  @media (max-width: 560px) { .btm { padding: calc(var(--px) * 6); } .btm-apk { justify-self: stretch; } }
+</style>

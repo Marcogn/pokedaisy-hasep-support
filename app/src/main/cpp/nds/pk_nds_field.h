@@ -61,6 +61,14 @@ typedef struct PkNdsFieldGame {
     uint32_t battleManagerPtr;
     int offBattleUi;
     int offUiHandler;
+    // Which panel waits: the manager's UI object at offBattlePanels runs the panel's handler at offPanelFn, which is
+    // commandsFn at the commands and movesFn at the moves. Not its id: on the way back to the commands the id still says
+    // the moves (or the party) for a few frames while the commands' handler already runs. Gen4Reader.kt's
+    // readManagedBattleInput reads the same.
+    int offBattlePanels;
+    int offPanelFn;
+    uint32_t commandsFn;
+    uint32_t movesFn;
 } PkNdsFieldGame;
 
 // pk_wide.h's PK_FIELD_* bits, which the engine already reads, plus two the DS sets:
@@ -119,6 +127,17 @@ int pk_nds_origin_heartgold(const uint8_t* rom, uint32_t romLen);
 
 /** The battle controller's step (BattleContext.command: CONTROLLER_COMMAND_*) while a battle runs, else -1. */
 int pk_nds_battle_command(const PkNdsFieldGame* game, uint32_t (*read32)(uint32_t addr));
+
+/**
+ * EXP SHARE on the DS (Gen 4's US carts), after every frame: [mode] 0 off / 1 SPLIT / 2 FULL EXP, [mask] the party slots
+ * that aren't eggs, [patched] FULL's patch is in (as this returned last time). Writes the battle's masks and puts FULL's
+ * patch in or back ([write16] must also drop any compiled copy of the code). Returns whether the patch is in.
+ */
+bool pk_nds_exp_share_tick(const PkNdsFieldGame* game, int mode, uint32_t mask, bool patched, uint32_t (*read32)(uint32_t),
+                           void (*write32)(uint32_t, uint32_t), void (*write16)(uint32_t, uint16_t));
+
+/** The running battle's BattleContext (Gen 4's battle engine: Platinum, HeartGold / SoulSilver), or 0: no battle, or not that engine. */
+uint32_t pk_nds_battle_context(const PkNdsFieldGame* game, uint32_t (*read32)(uint32_t addr));
 /** Gen 5's battle touch screen as the touch rules read it: [out] = the panel's kind, whether it takes taps, the screen
  * btlv_scd opened (2 the bag, 3 the party). 0 when there's no battle panel (not Gen 5, no battle). nds_dump's fieldinfo. */
 int pk_nds_gen5_battle_panel(const PkNdsFieldGame* game, uint32_t (*read32)(uint32_t addr), int out[3]);
@@ -142,6 +161,14 @@ int pk_nds_battle_selecting(const PkNdsFieldGame* game);
  * screen a Gen 4 game wants there: its naming screen (the player's and the rival's names), known by engine A's DISPCNT
  * ([dispCntA]), since nothing the field read follows runs yet (GitHub #490). PK_NDS_FIELD_TOUCH or 0. */
 int pk_nds_field_screen_touch(const PkNdsFieldGame* game, int bits, uint32_t dispCntA);
+
+/** The screens' own say, added to [bits] (the field read's) by each DS core: [darkTop] / [darkBottom] whether each screen is
+ * one colour this frame. A blank top over a lit touch screen is the touch screen's moment (the main menu's CONTINUE, a
+ * question asked down there: PK_NDS_FIELD_TOUCH) - but not on the overworld or in a battle, where it's a fade or a flash
+ * (HeartGold's wild encounter turns the top screen one colour for ~6 frames first, a move's flash for a few), and the touch
+ * rules already say what those scenes want: read as wanted, the touch screen floated in with its loading dots before every
+ * battle (Discord, 1.6.1 and 1.6.2-beta.1). Then PK_NDS_FIELD_DARK_TOP / _BOTTOM. */
+int pk_nds_field_screen_bits(int bits, bool darkTop, bool darkBottom);
 
 /** STEADY FF music: whether the song the game plays can be copied now (pk_nds_music copies what's playing, frozen):
  * -1 while it can't - a volume fade runs, or (Gen 5) the song's own sequence player is missing (not started yet), paused
@@ -169,6 +196,13 @@ int pk_nds_field_state(const PkNdsFieldGame* game, uint32_t (*read32)(uint32_t a
 /** DS LAYOUT on one screen: the X menu comes back after a menu screen left by touch too (pk_nds_field.cpp). Call on the
  * screen's closing fade. */
 void pk_nds_field_keep_start_menu(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t), void (*write32)(uint32_t, uint32_t));
+
+/** EXPAND in HeartGold / SoulSilver and Platinum: before a frame ([hide] 1), the props of a loaded map chunk in another
+ * area than the player's that the game made model 0 (their model isn't this area's: a box only EXPAND's margins show)
+ * are marked culled (Platinum: hidden); after it ([hide] 0), they are put back, so a state between frames never keeps
+ * them. */
+void pk_nds_field_foreign_props(const PkNdsFieldGame* g, uint32_t (*read32)(uint32_t), void (*write32)(uint32_t, uint32_t),
+                                int hide);
 
 #ifdef __cplusplus
 }

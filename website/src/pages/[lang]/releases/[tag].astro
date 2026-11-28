@@ -1,0 +1,12 @@
+---
+// src/views/ReleasePage.astro in each language but English (src/i18n).
+import ReleasePage from '../../../views/ReleasePage.astro';
+import { getReleases } from '../../../lib/releases.js';
+import { PREFIXED } from '../../../i18n/index.js';
+
+export async function getStaticPaths() {
+  const releases = await getReleases();
+  return PREFIXED.flatMap((lang) => releases.map((r) => ({ params: { lang, tag: r.tag }, props: { tag: r.tag } })));
+}
+---
+<ReleasePage tag={Astro.props.tag} />

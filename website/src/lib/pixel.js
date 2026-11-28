@@ -617,6 +617,18 @@ SPRITES.globe = {
   rows: ['....KKKK....', '..KKBBGGKK..', '.KWBBGGGGBK.', '.KWGBBGGBBK.', 'KGGGGBBBBBBK', 'KGGGBBBBBBBK',
     'KBGBBBBGGBBK', 'KBBBBBGGGGBK', '.KBBBBGGGBK.', '.KBBBBBGGBK.', '..KKBBBBKK..', '....KKKK....'],
 };
+// The theme switch: a sun for the light page, a moon for the dark one.
+SPRITES.sun = {
+  // No ink outline: it's drawn on the dark page.
+  pal: { K: '#f0a820', Y: '#f8d030', O: '#e89818', W: '#fff4b0' },
+  rows: ['.....KK.....', '.K...KK...K.', '..K......K..', '....KKKK....', '...KYWYYK...', 'KK.KWYYYK.KK', 'KK.KYYYOK.KK',
+    '...KYYOOK...', '....KKKK....', '..K......K..', '.K...KK...K.', '.....KK.....'],
+};
+SPRITES.moon = {
+  pal: { K: INK, M: '#d8d4f0', L: '#ffffff', S: '#a8a2cc', Y: '#f8d030' },
+  rows: ['....KKKK..Y.', '..KKLMMK.YYY', '.KLMMKK...Y.', '.KLMK.......', 'KLMMK.......', 'KLMK........', 'KMMK........',
+    'KMMSK.......', '.KMMSKK...KK', '.KSMMMSKKKSK', '..KKSMMMMSK.', '....KKKKKK..'],
+};
 SPRITES.bird = { pal: { K: '#3a3a48' }, rows: ['K...K', '.K.K.', '..K..'] };
 // The homepage's quality-of-life cards: a PC, the keep-away spray, grass with no encounters, a TM, running, zoom.
 SPRITES.pc = {
@@ -637,7 +649,7 @@ SPRITES.tmDisc = {
 };
 SPRITES.run = {
   pal: { K: INK, R: '#e83028', W: '#ffffff' },
-  rows: ['.....KKKK...', '.....KRRK...', '.....KRRK...', 'K....KRRKK..', '.....KRRRRK.', 'KK..KRRRRRRK', '...KRRWRRRRK', 'K.KRRRWRRRRK', '.KWWWWWWWWWK', '.KKKKKKKKKKK'],
+  rows: ['.....KKKK...', '.....KRRK...', 'KK...KRRK...', '.....KRRKK..', 'KK...KRRRRK.', '....KRRRRRRK', 'KK.KRRWRRRRK', '..KRRRWRRRRK', '.KWWWWWWWWWK', '.KKKKKKKKKKK'],
 };
 SPRITES.zoom = {
   pal: { K: INK, U: '#58a0f0', W: '#d8f0ff', S: '#909098' },
@@ -799,6 +811,15 @@ SPRITES.android = {
     '..GGGGGGGGGGGGGGGGGGGGGGGGGGGG..', '................................',
   ],
 };
+// GitLab's mark, our own pixel drawing: the ears, the face's bands from red in the middle to yellow at its sides.
+SPRITES.gitlab = {
+  pal: { R: '#e24329', O: '#fc6d26', Y: '#fca326' },
+  rows: [
+    'R.............R', 'RR...........RR', 'RRR.........RRR', 'ORRR.......RRRO', 'OORRRRRRRRRRROO',
+    'YOORRRRRRRRROOY', 'YYOORRRRRRROOYY', '.YYOORRRRROOYY.', '..YYOORRROOYY..', '...YYOOROOYY...',
+    '....YYOOOYY....', '.....YYOYY.....', '......YYY......', '.......Y.......',
+  ],
+};
 SPRITES.tux = {
   pal: { K: '#202020', W: '#ffffff', Y: '#f8c030', O: '#d88800' },
   rows: [
@@ -860,7 +881,8 @@ SPRITES.iphone = {
     '....KKKKKKKKKKKKKKKKKK....', '.....KKKKKKK..KKKKKKK.....', '..........................',
   ],
 };
-SPRITES.pc = {
+// The download cards' desktop PC (Linux / Windows), big; the quality-of-life cards' small PC is SPRITES.pc above.
+SPRITES.desktop = {
   pal: { K: '#202020', S: '#909098', U: '#58a0f0', W: '#d8f0ff' },
   rows: [
     'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', 'KSSSSSSSSSSSSSSSSSSSSSSSSSSSKK', 'KSSSSSSSSSSSSSSSSSSSSSSSSSSSKK',

@@ -30,13 +30,33 @@ fun Color.nightShadow(): Color = remap { l -> 0.16f + 0.15f * l to 0.3f }
  */
 fun Color.themed(hue: Float, wash: Float): Color {
     if (alpha == 0f || wash <= 0f) return this
-    val (_, s, l) = hsl(red, green, blue)
+    val (h, s, l) = hsl(red, green, blue)
     if (s > 0.5f) return this
+    // Already in the theme's hue (a menu style's palette moved to it, [rehued]): left as it is.
+    if (s >= 0.08f && abs(((h - hue + 540f) % 360f) - 180f) < 4f) return this
     val l2 = if (l > 0.95f) 0.95f + (l - 0.95f) * 0.4f else l
     val edge = abs(2f * l2 - 1f)
     // Text-dark greys a little calmer than the window bands, or labels read as coloured ink.
     val reach = (1f - edge * edge * edge) * (if (l2 < 0.5f) 0.55f + 0.6f * l2 else 1f)
     val (r, g, b) = rgb(hue, max(s * 0.5f, wash * reach), l2)
+    return Color(r, g, b, alpha)
+}
+
+/**
+ * A palette colour moved to [to]'s hue, its saturation and lightness kept, when its own hue is in [from] (the menus'
+ * blues); greys and colours outside it (the foe's reds, the cursor's pink) stay. How a THEME recolours the whole menu
+ * style rather than only its greys.
+ */
+fun Color.rehued(from: ClosedFloatingPointRange<Float>, to: Float, calmed: Boolean = true): Color {
+    if (alpha == 0f) return this
+    val (h, s, l) = hsl(red, green, blue)
+    if (s < 0.04f || h !in from) return this
+    // Greens and yellows read far brighter than a blue at the same saturation and lightness: calmer there, the strong
+    // colours a little darker too.
+    val calm = if (calmed && to in 45f..175f) 0.6f else 1f
+    val s2 = if (s > 0.35f) s * calm else s
+    val l2 = if (calm < 1f && s > 0.35f && l in 0.45f..0.9f) l - 0.06f else l
+    val (r, g, b) = rgb(to, s2, l2)
     return Color(r, g, b, alpha)
 }
 

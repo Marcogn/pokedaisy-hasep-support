@@ -54,8 +54,10 @@ int main(int argc,char** argv){
   auto bits=pk_nds_field_state(g,read32,nullptr,0);
   assert((bits&PK_NDS_FIELD_TOP_ONLY) && !(bits&PK_NDS_FIELD_TOUCH));
   write32(child,0x021D0D81); // upstream's Platinum options app
+  write32(child+12,74);      // its template's overlay: other apps load at the options' init address too
   assert(pk_nds_field_state(g,read32,nullptr,0)&PK_NDS_FIELD_TOP_ONLY);
   write32(child,0x02012345); // another menu app requires both screens
+  write32(child+12,0);
   assert(pk_nds_field_state(g,read32,nullptr,0)&PK_NDS_FIELD_TOUCH);
   assert(pk_nds_field_game("DSPT",0)==nullptr);
   const auto* b2=pk_nds_field_game("IREO",0);assert(b2);

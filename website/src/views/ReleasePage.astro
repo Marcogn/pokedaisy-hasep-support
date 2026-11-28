@@ -1,0 +1,114 @@
+---
+// One release's own page (/releases/<tag>/, like GitHub's release page): its notes, its files grouped by platform with
+// their install guides (each a /dl/ link, the download counter), the CIA's QR code and the source, and the releases
+// either side. Releases from GitHub's time have their notes only (their files weren't kept): they point at the newest.
+import Base from '../layouts/Base.astro';
+import Pixel from '../components/Pixel.astro';
+import { formatDate, getReleases, markdown, releasePath, FILES_ORIGIN } from '../lib/releases.js';
+import { PLATFORMS, formatSize } from '../lib/downloads.js';
+import { trFor, langOfPath, DEFAULT_LANG } from '../i18n/index.js';
+
+const { tag } = Astro.props as { tag: string };
+const tr = trFor(Astro.url);
+const lang = langOfPath(Astro.url.pathname);
+const releases = await getReleases();
+const i = releases.findIndex((r) => r.tag === tag);
+const r = releases[i];
+const newer = releases[i - 1];
+const older = releases[i + 1];
+const latest = releases[0];
+
+const matches = (f: { match: string | ((n: string) => boolean) }, name: string) => (typeof f.match === 'string' ? f.match === name : f.match(name));
+// The release's files under the platform they're for, in the DOWNLOAD cards' order and words.
+const groups = PLATFORMS.filter((p) => !p.soon).map((p) => ({
+  ...p,
+  files: p.files.flatMap((f) => {
+    const a = r.assets.find((x) => matches(f, x.name));
+    return a ? [{ ...a, icon: f.icon, label: f.label }] : [];
+  }),
+})).filter((p) => p.files.length);
+const source = r.assets.find((a) => a.name.endsWith('-source.tar.gz'));
+const qr = r.assets.find((a) => a.name === 'pokedaisy-cia-qr.png');
+const guide = (p: { guide: string; localGuide?: boolean }) => (p.localGuide && lang !== DEFAULT_LANG ? `/${lang}${p.guide}` : p.guide);
+---
+<Base title={`PokeDaisy ${r.version} · ${tr('RELEASES')}`} description={tr('Every PokeDaisy release and what changed in it. The app checks for updates itself and installs them for you.')}>
+  <section class="block container narrow">
+    <p class="crumb small"><a href={tr.path('/releases/')}><span class="flip"><Pixel name="cursor" scale={0.5} /></span> {tr('ALL RELEASES')}</a></p>
+    <article class="f-card rel">
+      <header class="rel-head">
+        <h1 class="rel-ver">PokeDaisy {r.version}</h1>
+        {i === 0 && <span class="chip f-pillGreen">{tr('LATEST')}</span>}
+        <span class="small muted">{formatDate(r.date, tr.locale)}</span>
+      </header>
+      {tr.lang !== 'en' && <p class="small muted">{tr('The notes for each release are in English.')}</p>}
+      <div class="notes" lang="en" set:html={markdown(r.body)} />
+    </article>
+
+    {r.assets.length > 0 ? (
+      <section class="files" data-track-where="releases">
+        <h2 class="eyebrow">{tr('DOWNLOADS')}</h2>
+        <div class="groups">
+          {groups.map((p) => (
+            <article class="group f-card">
+              <h3 class="g-name"><Pixel name={p.icon} scale={0.5} /> {p.name}</h3>
+              <ul class="g-files">
+                {p.files.map((f) => (
+                  <li>
+                    <a class="file f-btn h-btnHot" href={f.url} download>
+                      <Pixel name={f.icon} scale={0.334} />
+                      <span class="what"><span class="label">{tr(f.label)}</span><span class="tiny muted">{f.name} · {formatSize(f.size)}</span></span>
+                      <Pixel name="download" scale={0.667} />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              {p.id === '3ds' && qr && (
+                <figure class="qr">
+                  <img src={`${FILES_ORIGIN}/${r.tag}/${qr.name}?v=${(qr.sha256 ?? '').slice(0, 8)}`} width="160" height="160" alt="QR code of pokedaisy.cia" loading="lazy" />
+                  <figcaption class="tiny muted">{tr('Scan it in FBI (Remote Install > Scan QR Code) to install the .cia on the HOME Menu.')}</figcaption>
+                </figure>
+              )}
+              <a class="g-guide small" href={guide(p)}><Pixel name="guide" scale={0.5} /> {tr('HOW TO INSTALL')}</a>
+            </article>
+          ))}
+        </div>
+        {source && (
+          <p class="small"><a href={source.url} download><Pixel name="download" scale={0.5} /> {tr('SOURCE CODE')}</a> <span class="tiny muted">{source.name} · {formatSize(source.size)}</span></p>
+        )}
+      </section>
+    ) : r.tag !== latest.tag && (
+      <p class="small"><a class="btn f-primary h-primaryHot primary small" href={tr.path(releasePath(latest.tag))}><Pixel name="download" scale={0.667} /> {tr('LATEST')} · {latest.version}</a></p>
+    )}
+
+    <nav class="around small" aria-label={tr('RELEASES')}>
+      {newer ? <a href={tr.path(releasePath(newer.tag))}><span class="flip"><Pixel name="cursor" scale={0.5} /></span> {newer.version}</a> : <span />}
+      {older && <a href={tr.path(releasePath(older.tag))}>{older.version} <Pixel name="cursor" scale={0.5} /></a>}
+    </nav>
+  </section>
+</Base>
+
+<style>
+  .narrow { max-width: 900px; }
+  .crumb { font-family: var(--font-pixel); margin-bottom: 16px; }
+  .crumb a, .around a { display: inline-flex; align-items: center; gap: 8px; }
+  .flip { display: inline-flex; transform: scaleX(-1); }
+  .rel { filter: var(--hard-shadow); display: grid; gap: 16px; padding: calc(var(--px) * 9); }
+  .rel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+  .rel-ver { font-size: var(--t-xl); text-shadow: var(--bold); letter-spacing: 0.0625em; }
+  .notes { font-size: var(--r-m); line-height: 1.55; color: var(--ink-2); display: grid; gap: 8px; }
+  .notes :global(h4) { font-family: var(--font-pixel); color: var(--ink); margin-top: 8px; }
+  .notes :global(ul) { padding-left: 1.2em; display: grid; gap: 6px; }
+  .files { margin-top: 36px; display: grid; gap: 18px; }
+  .groups { display: grid; gap: 20px; }
+  .group { display: grid; gap: 14px; align-content: start; padding: calc(var(--px) * 7); filter: var(--hard-shadow); }
+  .g-name { font-family: var(--font-pixel); display: flex; align-items: center; gap: 10px; font-size: var(--t-l); }
+  .g-files { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; grid-auto-rows: 1fr; }
+  .g-files li { display: grid; }
+  .file { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; text-decoration: none; color: var(--ink); }
+  .what { display: grid; gap: 2px; min-width: 0; }
+  .what .tiny { overflow-wrap: anywhere; }
+  .label, .g-guide { font-family: var(--font-pixel); }
+  .qr { display: grid; gap: 8px; justify-items: start; margin: 0; }
+  .qr img { image-rendering: pixelated; background: #fff; }
+  .around { display: flex; justify-content: space-between; margin-top: 36px; font-family: var(--font-pixel); }
+</style>

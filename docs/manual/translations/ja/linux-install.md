@@ -17,7 +17,7 @@ PokeDaisyはLinuxでも動きます。Steam Deck、Linuxのパソコン、TrimUI
 
 ## どのファイルをダウンロードするか
 
-[PokeDaisyのリリースページ](https://github.com/lidor30/pokedaisy/releases) を開き、Linux用のファイルがある一番新しいリリースから、自分の機器に合うものをダウンロードします：
+[PokeDaisyのリリースページ](https://pokedaisy.com/#download-linux) を開き、Linux用のファイルがある一番新しいリリースから、自分の機器に合うものをダウンロードします：
 
 | あなたの機器 | ダウンロード |
 | --- | --- |
@@ -63,8 +63,8 @@ Steamはプログラムをそのフォルダで起動するので、起動オプ
 ## PortMasterの入った携帯機
 
 1. パソコンで `pokedaisy-portmaster-aarch64.zip` を展開します。中には `PokeDaisy.sh` と `pokedaisy` フォルダがあります。
-2. 両方をSDカードの、ファームウェアの `ports` フォルダにコピーします。
-3. ゲームは今の場所のままでかまいません。ゲームの一覧には `ports/pokedaisy/roms` と、ファームウェアの `gba`、`gb`、`gbc`、`nds` フォルダ（と `Game Boy Advance`、`Game Boy Color`、`Game Boy`、`Nintendo DS` という名前のフォルダ）が出ます。
+2. 両方をSDカードの、ファームウェアの `ports` フォルダにコピーします。muOSでは2つのフォルダに分けます。`PokeDaisy.sh` は `ROMS/Ports` に、`pokedaisy` フォルダは `ports` に入れます（どちらもカードのいちばん上です）。
+3. ゲームは今の場所のままでかまいません。ゲームの一覧には `ports/pokedaisy/roms` と、ファームウェアの `gba`、`gb`、`gbc`、`nds` フォルダ（と `Game Boy Advance`、`Game Boy Color`、`Game Boy`、`Nintendo DS` という名前のフォルダ）が出ます。カードのいちばん上でも、その `ROMS` フォルダの中でもかまいません（muOS: `ROMS/GBA`）。
 4. Portsの一覧からPokeDaisyを起動します。
 
 PortMasterが機器のボタンをPokeDaisyに伝えるので、設定しなくても使えます。MenuボタンかGuideボタンでPokeDaisyのメニューが開き、ほかのportと同じくSELECTとSTARTを一緒に押すと終了します。ROCKNIXの入ったGKD 350Hで遊ばれています。

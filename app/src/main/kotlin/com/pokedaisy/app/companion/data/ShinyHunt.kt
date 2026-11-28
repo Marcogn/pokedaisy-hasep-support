@@ -13,6 +13,9 @@ class ShinyHunt {
 
     private var counted = false
     private var alerted = false
+    /** The foe the last alert was for, while the next battle may still read it: its first samples can carry the battle
+     * before's battlers until the game writes its own (#1376: a plain foe announced as shiny right after a real one). */
+    private var stale: Any? = null
 
     fun sample(inBattle: Boolean, wild: Boolean, foes: List<MonView>): Step {
         if (!inBattle) {
@@ -23,13 +26,18 @@ class ShinyHunt {
         if (!wild || foes.isEmpty()) return NONE
         val count = !counted
         counted = true
-        val shiny = if (alerted) null else foes.firstOrNull { it.shiny }
-        if (shiny != null) alerted = true
+        val leftOver = stale != null && foes.any { key(it) == stale }
+        if (!leftOver) stale = null
+        val shiny = if (alerted || leftOver) null else foes.firstOrNull { it.shiny }
+        if (shiny != null) { alerted = true; stale = key(shiny) }
         return if (count || shiny != null) Step(count, shiny) else NONE
     }
 
     companion object {
         private val NONE = Step(false, null)
+
+        /** A battler as read: the same species at the same level with the same HP, stats and personality is the same one. */
+        private fun key(m: MonView): Any = listOf(m.species, m.level, m.maxHp, m.personality, m.stats, m.battleStats)
 
         /** Whether [snap]'s battle is a wild one, as far as the reader knows. */
         fun wild(snap: SnapshotView): Boolean = snap.isTrainerBattle?.not() ?: snap.enemyParty.isEmpty()
