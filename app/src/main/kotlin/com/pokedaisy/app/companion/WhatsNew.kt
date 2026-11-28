@@ -61,7 +61,9 @@ object WhatsNew {
      */
     private val FORK: List<Notes> by lazy {
         listOf(
-            onRelease("1.6.2.2.1", HOTFIX_1_6_2_2, "Hasep: on PokeDaisy 1.6.2.2."),
+            // On the release's notes, not the hotfix's: 1.6.2.2's line says updates come from pokedaisy.com, which isn't so here
+            // (the fork updates from its own GitHub releases); its RG Rotate fix goes in the fork's line instead.
+            onRelease("1.6.2.2.1", NOTES_1_6_2, "Hasep: on PokeDaisy 1.6.2.2, with its fix for games closing at once on the Anbernic RG Rotate."),
             Notes(
                 "1.6.1.2",
                 listOf(Section(FIXES, listOf(
